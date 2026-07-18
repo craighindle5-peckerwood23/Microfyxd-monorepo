@@ -391,6 +391,20 @@ async function startServer() {
       // 2. Inject parameters
       if (sourceCode) {
         state.sandbox.sourceCode = sourceCode;
+      } else {
+        const lowercasePrompt = (prompt || '').toLowerCase();
+        const isSandboxQuery = 
+          lowercasePrompt.includes('sandbox') || 
+          lowercasePrompt.includes('repair') || 
+          lowercasePrompt.includes('diagnose') || 
+          lowercasePrompt.includes('compile') || 
+          lowercasePrompt.includes('heal') || 
+          lowercasePrompt.includes('code') || 
+          lowercasePrompt.includes('snippet') || 
+          lowercasePrompt.includes('syntax');
+        if (isSandboxQuery) {
+          state.sandbox.sourceCode = `// Microfyxd Code Workspace - Syntax Error Diagnostic\nimport { someHelper }\n\nconst bugVar\n\nfunction processECU() {\n  console.log("Reading ECU Telemetry...")\n  // Unclosed brackets below will trigger sandbox compilation failure\n  if (bugVar === undefined) {\n    return "unresolved"`;
+        }
       }
       if (hardwareOverride) {
         state.phenotype.hardware = hardwareOverride;

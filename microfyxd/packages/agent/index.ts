@@ -423,7 +423,18 @@ export function buildProductionGraph(): CompiledGraph {
   // Conditional routing from selfCheckNode:
   // If sandbox code exists, go to diagnoseNode, else go directly to humanInTheLoopNode
   graph.addConditionalEdges('selfCheckNode', (state) => {
-    if (state.sandbox.sourceCode) {
+    const prompt = state.messages[0]?.content?.toLowerCase() || '';
+    const isSandboxQuery = 
+      prompt.includes('sandbox') || 
+      prompt.includes('repair') || 
+      prompt.includes('diagnose') || 
+      prompt.includes('compile') || 
+      prompt.includes('heal') || 
+      prompt.includes('code') || 
+      prompt.includes('snippet') || 
+      prompt.includes('syntax');
+
+    if (state.sandbox.sourceCode || isSandboxQuery) {
       return 'diagnoseNode';
     }
     return 'humanInTheLoopNode';

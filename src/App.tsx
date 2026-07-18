@@ -35,7 +35,18 @@ import {
   History,
   Plus
 } from 'lucide-react';
-import { auth, googleSignIn, logout, initAuth } from './lib/firebase.ts';
+import { 
+  auth, 
+  googleSignIn, 
+  logout, 
+  initAuth,
+  syncUserProfileToFirestore,
+  saveFavoriteToFirestore,
+  deleteFavoriteFromFirestore,
+  logAuditToFirestore,
+  fetchFavoritesFromFirestore,
+  fetchAuditLogsFromFirestore
+} from './lib/firebase.ts';
 import { User } from 'firebase/auth';
 
 interface TraceLog {
@@ -97,7 +108,13 @@ export default function App() {
   const syncAndLoadData = async (fbToken: string, gToken: string) => {
     try {
       setIsLoadingWorkspace(true);
-      // Sync user
+      
+      // 1. Sync user profile to secure Firestore registry
+      if (auth.currentUser) {
+        await syncUserProfileToFirestore(auth.currentUser);
+      }
+
+      // 2. Sync user to SQL database
       await fetch('/api/users/sync', {
         method: 'POST',
         headers: {
@@ -155,29 +172,85 @@ export default function App() {
 
   const loadFavorites = async (fbToken: string) => {
     try {
+      let favorites: any[] = [];
       const res = await fetch('/api/favorites', {
         headers: { 'Authorization': `Bearer ${fbToken}` }
       });
       const data = await res.json();
       if (data.success) {
-        setFavItems(data.favorites || []);
+        favorites = data.favorites || [];
       }
+      
+      // Dual-load or fallback from Firestore
+      if (currentUser) {
+        const firestoreFavs = await fetchFavoritesFromFirestore(currentUser.uid);
+        if (favorites.length === 0 && firestoreFavs.length > 0) {
+          favorites = firestoreFavs.map((f: any) => ({
+            id: f.id,
+            type: f.type,
+            externalId: f.externalId,
+            title: f.title,
+            snippet: f.snippet,
+            createdAt: f.createdAt
+          }));
+        }
+      }
+      setFavItems(favorites);
     } catch (err) {
-      console.error('Failed to load favorites from Cloud SQL:', err);
+      console.error('Failed to load favorites from Cloud SQL, trying Firestore:', err);
+      if (currentUser) {
+        const firestoreFavs = await fetchFavoritesFromFirestore(currentUser.uid);
+        setFavItems(firestoreFavs);
+      }
     }
   };
 
   const loadAuditLogs = async (fbToken: string) => {
     try {
+      let logs: any[] = [];
       const res = await fetch('/api/audit-logs', {
         headers: { 'Authorization': `Bearer ${fbToken}` }
       });
       const data = await res.json();
       if (data.success) {
-        setAuditLogsList(data.logs || []);
+        logs = data.logs || [];
       }
+
+      // Fallback or load from Firestore audit logs
+      if (currentUser) {
+        const firestoreLogs = await fetchAuditLogsFromFirestore(currentUser.uid);
+        if (logs.length === 0 && firestoreLogs.length > 0) {
+          logs = firestoreLogs;
+        }
+      }
+      setAuditLogsList(logs);
     } catch (err) {
-      console.error('Failed to load audit logs from Cloud SQL:', err);
+      console.error('Failed to load audit logs from Cloud SQL, trying Firestore:', err);
+      if (currentUser) {
+        const firestoreLogs = await fetchAuditLogsFromFirestore(currentUser.uid);
+        setAuditLogsList(firestoreLogs);
+      }
+    }
+  };
+
+  const logAudit = async (action: string, details: string) => {
+    if (currentUser) {
+      await logAuditToFirestore(currentUser.uid, action, details);
+    }
+    if (firebaseToken) {
+      try {
+        await fetch('/api/audit-logs', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${firebaseToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ action, details })
+        });
+      } catch (err) {
+        console.error('Failed to write SQL audit log:', err);
+      }
+      loadAuditLogs(firebaseToken);
     }
   };
 
@@ -283,6 +356,7 @@ export default function App() {
   const handleAddFav = async (type: 'email' | 'file', externalId: string, title: string, snippet: string) => {
     if (!firebaseToken) return;
     try {
+      // 1. Cloud SQL Store
       const res = await fetch('/api/favorites', {
         method: 'POST',
         headers: {
@@ -292,27 +366,42 @@ export default function App() {
         body: JSON.stringify({ type, externalId, title, snippet })
       });
       const data = await res.json();
+      
+      // 2. Firestore Sync Store
+      if (currentUser) {
+        await saveFavoriteToFirestore(currentUser.uid, type, externalId, title, snippet);
+      }
+
       if (data.success) {
-        alert('Item added to Cloud SQL favorites!');
+        alert('Item added to favorites (Sync enabled: Cloud SQL + Firestore)!');
         loadFavorites(firebaseToken);
       } else {
-        alert(`Failed to save favorite: ${data.error}`);
+        alert(`Failed to save favorite to Cloud SQL: ${data.error}`);
       }
     } catch (err: any) {
       alert(`Error saving favorite: ${err.message}`);
     }
   };
 
-  const handleDeleteFav = async (favId: number) => {
+  const handleDeleteFav = async (favId: any) => {
     if (!firebaseToken) return;
     try {
+      const favItem = favItems.find(f => f.id === favId);
+
+      // 1. Cloud SQL Delete
       const res = await fetch(`/api/favorites/${favId}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${firebaseToken}` }
       });
       const data = await res.json();
+
+      // 2. Firestore Sync Delete
+      if (favItem && currentUser) {
+        await deleteFavoriteFromFirestore(currentUser.uid, favItem.externalId);
+      }
+
       if (data.success) {
-        alert('Favorite removed from database.');
+        alert('Favorite removed (Sync deleted from Cloud SQL + Firestore).');
         loadFavorites(firebaseToken);
       } else {
         alert(`Failed to delete favorite: ${data.error}`);
@@ -351,17 +440,7 @@ export default function App() {
               alert(`Selected Google Drive item: ${file.name}`);
               await handleAddFav('file', file.id, file.name, `Google Picker Selected file. MIME: ${file.mimeType}`);
               // Log the picker event
-              if (firebaseToken) {
-                await fetch('/api/audit-logs', {
-                  method: 'POST',
-                  headers: {
-                    'Authorization': `Bearer ${firebaseToken}`,
-                    'Content-Type': 'application/json'
-                  },
-                  body: JSON.stringify({ action: 'PICK_FILE_PICKER', details: `Selected ${file.name} (ID: ${file.id})` })
-                });
-                loadAuditLogs(firebaseToken);
-              }
+              await logAudit('PICK_FILE_PICKER', `Selected ${file.name} (ID: ${file.id})`);
             }
           })
           .setOrigin(pickerOrigin)
@@ -383,16 +462,7 @@ export default function App() {
         if (proceed) {
           handleAddFav('file', simId, randomName, `Simulated picker file selection.`);
           // Log audit log
-          if (firebaseToken) {
-            fetch('/api/audit-logs', {
-              method: 'POST',
-              headers: {
-                'Authorization': `Bearer ${firebaseToken}`,
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify({ action: 'PICK_FILE_PICKER', details: `Selected simulated file: ${randomName} (ID: ${simId})` })
-            }).then(() => loadAuditLogs(firebaseToken));
-          }
+          logAudit('PICK_FILE_PICKER', `Selected simulated file: ${randomName} (ID: ${simId})`);
         }
       }
     } catch (err) {
@@ -558,27 +628,7 @@ export default function App() {
 
     const auditDetails = `VRAM Allocation Shift: Re-routed ${rerouteAmount}GB VRAM from ${sourceGpu.name} to ${destGpu.name}. Reason: Performance workload optimization.`;
     
-    if (firebaseToken) {
-      try {
-        const res = await fetch('/api/audit-logs', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${firebaseToken}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            action: 'GPU_VRAM_REROUTE',
-            details: auditDetails
-          })
-        });
-        const data = await res.json();
-        if (data.success) {
-          loadAuditLogs(firebaseToken);
-        }
-      } catch (err) {
-        console.error('Failed to log VRAM reroute to database:', err);
-      }
-    }
+    await logAudit('GPU_VRAM_REROUTE', auditDetails);
 
     setMessages(prev => [...prev, {
       role: 'system',
@@ -676,13 +726,29 @@ Microfyxd is an advanced, high-assurance multi-agent platform orchestrated stric
     if (isRunning) return;
     
     const activePrompt = customPrompt || prompt;
-    const activeCode = customCode !== undefined ? customCode : (activePrompt.toLowerCase().includes('repair') ? sandboxCode : '');
+    const lowercasePrompt = activePrompt.toLowerCase();
+    const isSandboxQuery = 
+      lowercasePrompt.includes('sandbox') || 
+      lowercasePrompt.includes('repair') || 
+      lowercasePrompt.includes('diagnose') || 
+      lowercasePrompt.includes('compile') || 
+      lowercasePrompt.includes('heal') || 
+      lowercasePrompt.includes('code') || 
+      lowercasePrompt.includes('snippet') || 
+      lowercasePrompt.includes('syntax');
+
+    const activeCode = customCode !== undefined ? customCode : (isSandboxQuery ? sandboxCode : '');
 
     setIsRunning(true);
     setTraces([]);
     setSelectedTrace(null);
     setSimulatedNodeIndex(0);
-    setActiveNodeId(graphNodesSequence[0].id);
+    
+    const expectedSequence = isSandboxQuery 
+      ? graphNodesSequence 
+      : graphNodesSequence.filter(node => !['diagnoseNode', 'repairNode', 'retryNode'].includes(node.id));
+
+    setActiveNodeId(expectedSequence[0].id);
 
     // Append user message
     setMessages(prev => [...prev, {
@@ -695,9 +761,9 @@ Microfyxd is an advanced, high-assurance multi-agent platform orchestrated stric
     let step = 0;
     const stepInterval = setInterval(() => {
       step++;
-      if (step < graphNodesSequence.length) {
+      if (step < expectedSequence.length) {
         setSimulatedNodeIndex(step);
-        setActiveNodeId(graphNodesSequence[step].id);
+        setActiveNodeId(expectedSequence[step].id);
       } else {
         clearInterval(stepInterval);
       }
@@ -964,8 +1030,9 @@ Microfyxd is an advanced, high-assurance multi-agent platform orchestrated stric
             {/* GRAPHLINES PIPELINE */}
             <div className="grid grid-cols-3 gap-2.5">
               {graphNodesSequence.map((node, index) => {
+                const wasExecuted = traces.some(t => t.nodeId === node.id);
                 const isActive = activeNodeId === node.id;
-                const isPast = simulatedNodeIndex > index;
+                const isPast = wasExecuted || (isRunning && simulatedNodeIndex > index);
                 const isSelected = selectedTrace?.nodeId === node.id;
 
                 return (
