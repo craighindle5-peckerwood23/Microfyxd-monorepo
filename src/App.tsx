@@ -408,6 +408,199 @@ export default function App() {
     `// Microfyxd Code Workspace - Syntax Error Diagnostic\nimport { someHelper }\n\nconst bugVar\n\nfunction processECU() {\n  console.log("Reading ECU Telemetry...")\n  // Unclosed brackets below will trigger sandbox compilation failure\n  if (bugVar === undefined) {\n    return "unresolved"`
   );
 
+  // GPU Cluster & VRAM Reroute state configurations
+  const [gpuCluster, setGpuCluster] = useState([
+    { id: 'gpu-0', name: 'Nvidia H100 SXM5 (Alpha)', temp: 62, util: 75, vramUsed: 64, vramTotal: 80, status: 'Active' as 'Active' | 'Standby' | 'Throttled', task: 'LangGraph Phenotype Inference' },
+    { id: 'gpu-1', name: 'Nvidia H100 SXM5 (Beta)', temp: 48, util: 20, vramUsed: 16, vramTotal: 80, status: 'Active' as 'Active' | 'Standby' | 'Throttled', task: 'Watchdog Safe Check' },
+    { id: 'gpu-2', name: 'Nvidia H100 SXM5 (Gamma)', temp: 40, util: 5, vramUsed: 4, vramTotal: 80, status: 'Standby' as 'Active' | 'Standby' | 'Throttled', task: 'Idle' },
+    { id: 'gpu-3', name: 'Nvidia H100 SXM5 (Delta)', temp: 38, util: 2, vramUsed: 2, vramTotal: 80, status: 'Standby' as 'Active' | 'Standby' | 'Throttled', task: 'Idle' }
+  ]);
+
+  const [selectedGpuId, setSelectedGpuId] = useState<string>('gpu-0');
+
+  const [memoryHistory, setMemoryHistory] = useState([
+    { tick: 0, 'gpu-0': 64, 'gpu-1': 16, 'gpu-2': 4, 'gpu-3': 2 },
+    { tick: 1, 'gpu-0': 63, 'gpu-1': 15, 'gpu-2': 4, 'gpu-3': 2 },
+    { tick: 2, 'gpu-0': 65, 'gpu-1': 17, 'gpu-2': 4, 'gpu-3': 2 },
+    { tick: 3, 'gpu-0': 64, 'gpu-1': 16, 'gpu-2': 4, 'gpu-3': 2 },
+    { tick: 4, 'gpu-0': 66, 'gpu-1': 16, 'gpu-2': 4, 'gpu-3': 2 },
+    { tick: 5, 'gpu-0': 64, 'gpu-1': 16, 'gpu-2': 4, 'gpu-3': 2 },
+    { tick: 6, 'gpu-0': 65, 'gpu-1': 15, 'gpu-2': 4, 'gpu-3': 2 },
+    { tick: 7, 'gpu-0': 63, 'gpu-1': 16, 'gpu-2': 4, 'gpu-3': 2 }
+  ]);
+
+  const [rerouteSource, setRerouteSource] = useState<string>('gpu-0');
+  const [rerouteDest, setRerouteDest] = useState<string>('gpu-2');
+  const [rerouteAmount, setRerouteAmount] = useState<number>(20);
+  const [rerouteStatus, setRerouteStatus] = useState<string>('');
+  const [isRerouting, setIsRerouting] = useState<boolean>(false);
+  const [rerouteProgress, setRerouteProgress] = useState<number>(0);
+
+  // Background VRAM fluctuation ticker to animate the memory graph
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setGpuCluster(prev => {
+        const updated = prev.map(gpu => {
+          if (gpu.status === 'Active') {
+            const utilDelta = Math.floor(Math.random() * 5) - 2;
+            const tempDelta = Math.floor(Math.random() * 3) - 1;
+            const vramDelta = Math.random() > 0.85 ? (Math.floor(Math.random() * 3) - 1) : 0;
+            return {
+              ...gpu,
+              util: Math.max(5, Math.min(95, gpu.util + utilDelta)),
+              temp: Math.max(35, Math.min(85, gpu.temp + tempDelta)),
+              vramUsed: Math.max(1, Math.min(gpu.vramTotal - 5, gpu.vramUsed + vramDelta))
+            };
+          } else {
+            return gpu;
+          }
+        });
+
+        setMemoryHistory(prevHist => {
+          const nextTick = prevHist[prevHist.length - 1].tick + 1;
+          return [
+            ...prevHist.slice(-9),
+            {
+              tick: nextTick,
+              'gpu-0': Math.round(updated[0].vramUsed),
+              'gpu-1': Math.round(updated[1].vramUsed),
+              'gpu-2': Math.round(updated[2].vramUsed),
+              'gpu-3': Math.round(updated[3].vramUsed)
+            }
+          ];
+        });
+
+        return updated;
+      });
+    }, 4500);
+
+    return () => clearInterval(timer);
+  }, []);
+
+  const handleGpuReroute = async () => {
+    if (isRerouting) return;
+    if (rerouteSource === rerouteDest) {
+      alert('Source and destination GPUs must be different!');
+      return;
+    }
+
+    const sourceGpu = gpuCluster.find(g => g.id === rerouteSource);
+    const destGpu = gpuCluster.find(g => g.id === rerouteDest);
+
+    if (!sourceGpu || !destGpu) return;
+    if (sourceGpu.vramUsed < rerouteAmount) {
+      alert(`Source GPU does not have ${rerouteAmount} GB of VRAM currently allocated.`);
+      return;
+    }
+    if (destGpu.vramUsed + rerouteAmount > destGpu.vramTotal) {
+      alert(`Destination GPU cannot accommodate another ${rerouteAmount} GB of allocation (Exceeds 80 GB limit).`);
+      return;
+    }
+
+    setIsRerouting(true);
+    setRerouteProgress(10);
+    setRerouteStatus('Acquiring dynamic VRAM control registers...');
+
+    const migrationSteps = [
+      { p: 25, text: 'Isolating active segment contexts on host PCIe bus...' },
+      { p: 50, text: 'Migrating active weights & transient KV-cache tensor states...' },
+      { p: 75, text: 'Rewiring LangGraph microfyxd active sequence dispatch maps...' },
+      { p: 90, text: 'Validating parity checksum hashes across cluster channels...' },
+      { p: 100, text: 'Cluster memory rebalanced & confirmed!' }
+    ];
+
+    for (let i = 0; i < migrationSteps.length; i++) {
+      await new Promise(resolve => setTimeout(resolve, 700));
+      setRerouteProgress(migrationSteps[i].p);
+      setRerouteStatus(migrationSteps[i].text);
+    }
+
+    // Apply state change
+    setGpuCluster(prev => prev.map(gpu => {
+      if (gpu.id === rerouteSource) {
+        const nextUsed = gpu.vramUsed - rerouteAmount;
+        return {
+          ...gpu,
+          vramUsed: nextUsed,
+          util: Math.max(5, gpu.util - 30),
+          status: nextUsed <= 4 ? 'Standby' : 'Active',
+          task: nextUsed <= 4 ? 'Idle' : gpu.task
+        };
+      }
+      if (gpu.id === rerouteDest) {
+        const nextUsed = gpu.vramUsed + rerouteAmount;
+        return {
+          ...gpu,
+          vramUsed: nextUsed,
+          util: Math.min(95, gpu.util + 40),
+          temp: Math.min(78, gpu.temp + 10),
+          status: 'Active',
+          task: `Rerouted Task (Migrated from ${sourceGpu.id.toUpperCase()})`
+        };
+      }
+      return gpu;
+    }));
+
+    // Record dynamic shift in memory history instantly
+    setMemoryHistory(prevHist => {
+      const nextTick = prevHist[prevHist.length - 1].tick + 1;
+      return [
+        ...prevHist.slice(-9),
+        {
+          tick: nextTick,
+          'gpu-0': Math.round(rerouteSource === 'gpu-0' ? (gpuCluster[0].vramUsed - rerouteAmount) : (rerouteDest === 'gpu-0' ? (gpuCluster[0].vramUsed + rerouteAmount) : gpuCluster[0].vramUsed)),
+          'gpu-1': Math.round(rerouteSource === 'gpu-1' ? (gpuCluster[1].vramUsed - rerouteAmount) : (rerouteDest === 'gpu-1' ? (gpuCluster[1].vramUsed + rerouteAmount) : gpuCluster[1].vramUsed)),
+          'gpu-2': Math.round(rerouteSource === 'gpu-2' ? (gpuCluster[2].vramUsed - rerouteAmount) : (rerouteDest === 'gpu-2' ? (gpuCluster[2].vramUsed + rerouteAmount) : gpuCluster[2].vramUsed)),
+          'gpu-3': Math.round(rerouteSource === 'gpu-3' ? (gpuCluster[3].vramUsed - rerouteAmount) : (rerouteDest === 'gpu-3' ? (gpuCluster[3].vramUsed + rerouteAmount) : gpuCluster[3].vramUsed))
+        }
+      ];
+    });
+
+    const auditDetails = `VRAM Allocation Shift: Re-routed ${rerouteAmount}GB VRAM from ${sourceGpu.name} to ${destGpu.name}. Reason: Performance workload optimization.`;
+    
+    if (firebaseToken) {
+      try {
+        const res = await fetch('/api/audit-logs', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${firebaseToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            action: 'GPU_VRAM_REROUTE',
+            details: auditDetails
+          })
+        });
+        const data = await res.json();
+        if (data.success) {
+          loadAuditLogs(firebaseToken);
+        }
+      } catch (err) {
+        console.error('Failed to log VRAM reroute to database:', err);
+      }
+    }
+
+    setMessages(prev => [...prev, {
+      role: 'system',
+      content: `🔄 **GPU VRAM Cluster Rebalanced**: Successfully migrated ${rerouteAmount} GB of cache registers from ${sourceGpu.id.toUpperCase()} to ${destGpu.id.toUpperCase()}.`,
+      timestamp: new Date().toLocaleTimeString()
+    }]);
+
+    setIsRerouting(false);
+    setRerouteStatus('');
+  };
+
+  const getSvgPathForGpu = (gpuId: string) => {
+    if (memoryHistory.length === 0) return '';
+    const points = memoryHistory.map((item, index) => {
+      const x = 20 + (index / (memoryHistory.length - 1)) * 440;
+      const val = (item as any)[gpuId] || 0;
+      const y = 110 - (val / 80) * 90;
+      return `${x},${y}`;
+    });
+    return `M ${points.join(' L ')}`;
+  };
+
   // Dynamic Graph execution state
   const [messages, setMessages] = useState<any[]>([
     {
@@ -1120,63 +1313,235 @@ Microfyxd is an advanced, high-assurance multi-agent platform orchestrated stric
 
               {/* TAB 4: INFRASTRUCTURE & GPU MULTI-DISPATCH */}
               {activeTab === 'infra' && (
-                <div className="flex flex-col gap-5 text-xs">
-                  <div>
-                    <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                      <Cpu className="w-4 h-4 text-indigo-400" />
-                      INFRASTRUCTURE ADAPTATION LAYER
-                    </h3>
-                    <p className="text-xs text-gray-400 mt-0.5">Detect GPUs, split sequential batches, and throttle dispatch based on thermal thresholds</p>
+                <div className="flex flex-col gap-6 text-xs">
+                  {/* Title block */}
+                  <div className="flex flex-wrap items-center justify-between gap-4">
+                    <div>
+                      <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                        <Cpu className="w-4 h-4 text-indigo-400" />
+                        INFRASTRUCTURE ADAPTATION LAYER & GPU CLUSTER
+                      </h3>
+                      <p className="text-xs text-gray-400 mt-0.5">
+                        Manage high-assurance GPU cluster nodes, analyze VRAM allocation graphs, and execute dynamic dynamic memory rerouting.
+                      </p>
+                    </div>
+                    
+                    <div className="flex items-center gap-2">
+                      <span className="flex items-center gap-1.5 text-[10px] font-mono px-2 py-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-lg">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                        CLUSTER STATUS: ACTIVE (4 NODES)
+                      </span>
+                    </div>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {/* GPU Monitors */}
-                    <div className="bg-[#0a0c13] border border-gray-800/40 rounded-xl p-5 flex flex-col gap-3">
-                      <h4 className="text-xs font-mono font-bold text-white uppercase border-b border-gray-850 pb-1.5 flex justify-between">
-                        <span>DETECTOR METRICS</span>
-                        <span className="text-emerald-400 text-[10px]">REAL-TIME SCAN</span>
-                      </h4>
+                  {/* GPU CLUSTER GRIDS */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    {gpuCluster.map((gpu) => {
+                      const isSelected = selectedGpuId === gpu.id;
+                      const percentVram = (gpu.vramUsed / gpu.vramTotal) * 100;
+                      return (
+                        <div 
+                          key={gpu.id}
+                          onClick={() => setSelectedGpuId(gpu.id)}
+                          className={`bg-[#0a0c13] border rounded-xl p-4 flex flex-col gap-3 transition-all duration-300 cursor-pointer ${
+                            isSelected 
+                              ? 'border-indigo-500 ring-1 ring-indigo-500/20 shadow-lg shadow-indigo-500/5' 
+                              : 'border-gray-800/60 hover:border-gray-700 hover:bg-[#0d0f19]'
+                          }`}
+                        >
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <span className="text-[10px] font-mono font-bold text-gray-500 block uppercase">{gpu.id}</span>
+                              <span className="font-sans font-bold text-xs text-white">{gpu.name}</span>
+                            </div>
+                            <span className={`px-1.5 py-0.5 rounded text-[9px] font-mono font-bold ${
+                              gpu.status === 'Active' 
+                                ? 'bg-[#121420] text-indigo-400 border border-indigo-500/20 animate-pulse' 
+                                : 'bg-[#111115] text-gray-400 border border-gray-800'
+                            }`}>
+                              {gpu.status}
+                            </span>
+                          </div>
 
-                      <div className="flex flex-col gap-3.5 mt-2">
-                        <div>
-                          <div className="flex justify-between text-[11px] font-mono text-gray-300 mb-1">
-                            <span>GPU 0: Nvidia H100 SXM5</span>
-                            <span>{metrics.temp}°C</span>
+                          <div className="grid grid-cols-2 gap-2 mt-1">
+                            <div className="bg-[#05060a] p-2 rounded border border-gray-850/40">
+                              <span className="text-[9px] text-gray-500 uppercase block">TEMP</span>
+                              <span className={`font-mono text-xs font-bold ${gpu.temp > 65 ? 'text-amber-400 animate-pulse' : 'text-gray-300'}`}>{gpu.temp}°C</span>
+                            </div>
+                            <div className="bg-[#05060a] p-2 rounded border border-gray-850/40">
+                              <span className="text-[9px] text-gray-500 uppercase block">UTIL</span>
+                              <span className="font-mono text-xs font-bold text-gray-300">{gpu.util}%</span>
+                            </div>
                           </div>
-                          <div className="w-full bg-gray-800 h-2 rounded-full overflow-hidden">
-                            <div className="bg-gradient-to-r from-emerald-400 to-amber-400 h-full rounded-full transition-all duration-500" style={{ width: '55%' }} />
+
+                          <div>
+                            <div className="flex justify-between text-[10px] font-mono text-gray-400 mb-1">
+                              <span>VRAM ALLOCATION</span>
+                              <span className="font-bold text-gray-300">{gpu.vramUsed} / {gpu.vramTotal} GB</span>
+                            </div>
+                            <div className="w-full bg-gray-900 h-1.5 rounded-full overflow-hidden">
+                              <div 
+                                className="bg-gradient-to-r from-indigo-500 to-purple-500 h-full rounded-full transition-all duration-500" 
+                                style={{ width: `${percentVram}%` }} 
+                              />
+                            </div>
                           </div>
-                          <span className="text-[9px] font-mono text-gray-500">Utilization: {metrics.util}% | VRAM: 80GB / 80GB active</span>
                         </div>
+                      );
+                    })}
+                  </div>
 
-                        <div>
-                          <div className="flex justify-between text-[11px] font-mono text-gray-300 mb-1">
-                            <span>GPU 1: Nvidia H100 SXM5</span>
-                            <span>48°C</span>
-                          </div>
-                          <div className="w-full bg-gray-800 h-2 rounded-full overflow-hidden">
-                            <div className="bg-gradient-to-r from-emerald-400 to-amber-400 h-full rounded-full transition-all duration-500" style={{ width: '40%' }} />
-                          </div>
-                          <span className="text-[9px] font-mono text-gray-500">Utilization: 8% | VRAM: 80GB / 80GB active</span>
+                  {/* DOUBLE COLUMN: MEMORY GRAPH vs MEMORY REROUTE MODULE */}
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                    {/* Left: Dynamic Memory Graph */}
+                    <div className="lg:col-span-7 bg-[#0a0c13] border border-gray-800/40 rounded-xl p-5 flex flex-col gap-4">
+                      <div className="flex items-center justify-between border-b border-gray-850 pb-2.5">
+                        <h4 className="text-xs font-mono font-bold text-white uppercase flex items-center gap-2">
+                          <Activity className="w-4 h-4 text-purple-400" />
+                          REAL-TIME VRAM ALLOCATION GRAPH
+                        </h4>
+                        <span className="text-[10px] font-mono text-gray-500 uppercase">TIMELINE (10S TICK)</span>
+                      </div>
+
+                      {/* SVG memory chart */}
+                      <div className="bg-[#05060a] border border-gray-950 rounded-lg p-3 relative h-[140px] flex items-center justify-center">
+                        <svg className="w-full h-full" viewBox="0 0 500 120" preserveAspectRatio="none">
+                          {/* Grid Lines */}
+                          <line x1="10" y1="10" x2="490" y2="10" stroke="#111321" strokeWidth="1" strokeDasharray="3,3" />
+                          <line x1="10" y1="55" x2="490" y2="55" stroke="#111321" strokeWidth="1" strokeDasharray="3,3" />
+                          <line x1="10" y1="100" x2="490" y2="100" stroke="#111321" strokeWidth="1" strokeDasharray="3,3" />
+
+                          {/* Left Axis Labels */}
+                          <text x="5" y="14" fill="#4b5563" fontSize="8" fontFamily="monospace">80G</text>
+                          <text x="5" y="59" fill="#4b5563" fontSize="8" fontFamily="monospace">40G</text>
+                          <text x="5" y="104" fill="#4b5563" fontSize="8" fontFamily="monospace">0G</text>
+
+                          {/* GPU Paths */}
+                          <path d={getSvgPathForGpu('gpu-0')} fill="none" stroke="#6366f1" strokeWidth="2.5" strokeLinecap="round" className="transition-all duration-500" />
+                          <path d={getSvgPathForGpu('gpu-1')} fill="none" stroke="#a855f7" strokeWidth="2" strokeLinecap="round" className="transition-all duration-500" />
+                          <path d={getSvgPathForGpu('gpu-2')} fill="none" stroke="#10b981" strokeWidth="2" strokeLinecap="round" className="transition-all duration-500" strokeDasharray="2,2" />
+                          <path d={getSvgPathForGpu('gpu-3')} fill="none" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round" className="transition-all duration-500" strokeDasharray="2,2" />
+
+                          {/* Nodes circles for the latest point */}
+                          {memoryHistory.length > 0 && (() => {
+                            const lastIdx = memoryHistory.length - 1;
+                            const x = 460;
+                            const y0 = 110 - (((memoryHistory[lastIdx] as any)['gpu-0'] || 0) / 80) * 90;
+                            const y1 = 110 - (((memoryHistory[lastIdx] as any)['gpu-1'] || 0) / 80) * 90;
+                            const y2 = 110 - (((memoryHistory[lastIdx] as any)['gpu-2'] || 0) / 80) * 90;
+                            const y3 = 110 - (((memoryHistory[lastIdx] as any)['gpu-3'] || 0) / 80) * 90;
+                            return (
+                              <g>
+                                <circle cx={x} cy={y0} r="4" fill="#6366f1" stroke="#08090d" strokeWidth="1.5" />
+                                <circle cx={x} cy={y1} r="4" fill="#a855f7" stroke="#08090d" strokeWidth="1.5" />
+                                <circle cx={x} cy={y2} r="4" fill="#10b981" stroke="#08090d" strokeWidth="1.5" />
+                                <circle cx={x} cy={y3} r="4" fill="#f59e0b" stroke="#08090d" strokeWidth="1.5" />
+                              </g>
+                            );
+                          })()}
+                        </svg>
+                      </div>
+
+                      {/* Legend and stats */}
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[10px] font-mono">
+                        <div className="flex items-center gap-1.5 justify-center py-1.5 rounded bg-[#6366f1]/5 border border-indigo-500/10">
+                          <span className="w-2 h-2 rounded-full bg-[#6366f1]" />
+                          <span className="text-gray-300">GPU-0: {gpuCluster[0].vramUsed}G</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 justify-center py-1.5 rounded bg-[#a855f7]/5 border border-purple-500/10">
+                          <span className="w-2 h-2 rounded-full bg-[#a855f7]" />
+                          <span className="text-gray-300">GPU-1: {gpuCluster[1].vramUsed}G</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 justify-center py-1.5 rounded bg-[#10b981]/5 border border-emerald-500/10">
+                          <span className="w-2 h-2 rounded-full bg-[#10b981]" />
+                          <span className="text-gray-300">GPU-2: {gpuCluster[2].vramUsed}G</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 justify-center py-1.5 rounded bg-[#f59e0b]/5 border border-amber-500/10">
+                          <span className="w-2 h-2 rounded-full bg-[#f59e0b]" />
+                          <span className="text-gray-300">GPU-3: {gpuCluster[3].vramUsed}G</span>
                         </div>
                       </div>
                     </div>
 
-                    {/* Batch Dispatch Split logs */}
-                    <div className="bg-[#0a0c13] border border-gray-800/40 rounded-xl p-5 flex flex-col gap-4">
-                      <h4 className="text-xs font-mono font-bold text-white uppercase border-b border-gray-850 pb-2">
-                        Multi-GPU Task Sequence Splitter
-                      </h4>
+                    {/* Right: Dynamic High-Assurance Memory Reroute Module */}
+                    <div className="lg:col-span-5 bg-[#0a0c13] border border-gray-800/40 rounded-xl p-5 flex flex-col gap-4">
+                      <div className="border-b border-gray-850 pb-2.5">
+                        <h4 className="text-xs font-mono font-bold text-white uppercase flex items-center gap-2">
+                          <Sliders className="w-4 h-4 text-indigo-400" />
+                          GPU MEMORY REROUTING SYSTEM
+                        </h4>
+                      </div>
+
                       <p className="text-xs text-gray-400 leading-relaxed">
-                        To run massive tasks efficiently, large workloads are segmented into sub-tasks and dispatched dynamically across multiple GPUs to reduce heat and speed up inference.
+                        Manually balance cluster workload distribution. Safely offload memory states or transaction cache layers from saturated nodes onto low-load standby GPUs.
                       </p>
 
-                      <div className="bg-[#05060a] border border-gray-950 rounded-lg p-3 font-mono text-[11px] text-gray-300 flex flex-col gap-1.5">
-                        <div className="text-indigo-400 font-bold">Active Schedule Log:</div>
-                        <div>• [SCHEDULER] Splitting telemetry batch into 8 sequences</div>
-                        <div>• [SCHEDULER] Dispatching sequence [0-3] to GPU-0</div>
-                        <div>• [SCHEDULER] Dispatching sequence [4-7] to GPU-1</div>
-                        <div className="text-emerald-400 font-semibold">• [SCHEDULER] Merging sequence results... SUCCESS</div>
+                      <div className="flex flex-col gap-3 mt-1">
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="text-[10px] font-mono text-gray-500 uppercase block mb-1">Source Node</label>
+                            <select 
+                              value={rerouteSource}
+                              onChange={(e) => setRerouteSource(e.target.value)}
+                              className="w-full bg-[#05060a] border border-gray-800 focus:border-indigo-500 rounded-lg px-2.5 py-1.5 text-xs text-gray-300 font-mono outline-none"
+                            >
+                              {gpuCluster.map(gpu => (
+                                <option key={gpu.id} value={gpu.id}>{gpu.id.toUpperCase()} ({gpu.vramUsed} GB Used)</option>
+                              ))}
+                            </select>
+                          </div>
+
+                          <div>
+                            <label className="text-[10px] font-mono text-gray-500 uppercase block mb-1">Destination Node</label>
+                            <select 
+                              value={rerouteDest}
+                              onChange={(e) => setRerouteDest(e.target.value)}
+                              className="w-full bg-[#05060a] border border-gray-800 focus:border-indigo-500 rounded-lg px-2.5 py-1.5 text-xs text-gray-300 font-mono outline-none"
+                            >
+                              {gpuCluster.map(gpu => (
+                                <option key={gpu.id} value={gpu.id}>{gpu.id.toUpperCase()} ({gpu.vramTotal - gpu.vramUsed} GB Free)</option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+
+                        <div>
+                          <div className="flex justify-between text-[10px] font-mono mb-1">
+                            <span className="text-gray-500 uppercase">Transfer Capacity</span>
+                            <span className="text-indigo-400 font-bold">{rerouteAmount} GB</span>
+                          </div>
+                          <input 
+                            type="range"
+                            min="5"
+                            max="40"
+                            step="5"
+                            value={rerouteAmount}
+                            onChange={(e) => setRerouteAmount(Number(e.target.value))}
+                            className="w-full accent-indigo-500 bg-gray-800 h-1 rounded"
+                          />
+                        </div>
+
+                        {/* Migration Loader / State panel */}
+                        {isRerouting ? (
+                          <div className="bg-[#05060a] border border-indigo-950 rounded-lg p-3 flex flex-col gap-2 font-mono text-[10px]">
+                            <div className="flex justify-between items-center text-indigo-400 font-bold">
+                              <span>MIGRATING ACTIVE VRAM PAGES...</span>
+                              <span>{rerouteProgress}%</span>
+                            </div>
+                            <div className="w-full bg-gray-950 h-1 rounded-full overflow-hidden">
+                              <div className="bg-indigo-500 h-full rounded-full transition-all duration-300" style={{ width: `${rerouteProgress}%` }} />
+                            </div>
+                            <span className="text-gray-400 animate-pulse">⚡ {rerouteStatus}</span>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={handleGpuReroute}
+                            className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-mono font-bold text-xs py-2 px-4 rounded-lg transition shadow-lg shadow-indigo-600/10 cursor-pointer flex items-center justify-center gap-1.5"
+                          >
+                            <RefreshCw className="w-3.5 h-3.5 animate-spin-slow" />
+                            CONFIRM CLUSTER REROUTE
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>
