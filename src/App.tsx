@@ -33,7 +33,11 @@ import {
   Trash2,
   Heart,
   History,
-  Plus
+  Plus,
+  Globe,
+  CloudLightning,
+  Link2,
+  Search
 } from 'lucide-react';
 import { 
   auth, 
@@ -67,7 +71,7 @@ interface MonorepoFile {
 
 export default function App() {
   // Navigation & UI state
-  const [activeTab, setActiveTab] = useState<'cockpit' | 'traces' | 'files' | 'phenotype' | 'ego' | 'infra' | 'sandbox' | 'memory' | 'doctrine' | 'workspace'>('cockpit');
+  const [activeTab, setActiveTab] = useState<'cockpit' | 'traces' | 'files' | 'phenotype' | 'ego' | 'infra' | 'sandbox' | 'memory' | 'doctrine' | 'workspace' | 'integrations'>('cockpit');
   
   // Google Workspace & Firebase Auth state
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -84,6 +88,144 @@ export default function App() {
   const [emailSubject, setEmailSubject] = useState<string>('');
   const [emailBody, setEmailBody] = useState<string>('');
   const [newFolderName, setNewFolderName] = useState<string>('');
+
+  // Core T-API, Namecheap & Vercel Integration State
+  const [injections, setInjections] = useState<any[]>([]);
+  const [isLoadingInjections, setIsLoadingInjections] = useState<boolean>(false);
+  const [selectedInjection, setSelectedInjection] = useState<any | null>(null);
+  const [testExecutionOutput, setTestExecutionOutput] = useState<any | null>(null);
+  const [isExecutingTest, setIsExecutingTest] = useState<boolean>(false);
+  const [activeSubSection, setActiveSubSection] = useState<'injections' | 'namecheap' | 'vercel'>('injections');
+
+  // Namecheap DNS config
+  const [dnsDomain, setDnsDomain] = useState<string>('microfyxd.com');
+  const [dnsApiUser, setDnsApiUser] = useState<string>('');
+  const [dnsApiKey, setDnsApiKey] = useState<string>('');
+  const [dnsRecords, setDnsRecords] = useState<any[]>([]);
+  const [isLoadingDns, setIsLoadingDns] = useState<boolean>(false);
+
+  // Vercel credentials
+  const [vercelToken, setVercelToken] = useState<string>('');
+  const [vercelProjectId, setVercelProjectId] = useState<string>('');
+  const [vercelLogs, setVercelLogs] = useState<string[]>([]);
+  const [vercelUrl, setVercelUrl] = useState<string>('');
+  const [isDeployingVercel, setIsDeployingVercel] = useState<boolean>(false);
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [categoryFilter, setCategoryFilter] = useState<string>('All');
+
+  const loadInjections = async () => {
+    try {
+      setIsLoadingInjections(true);
+      const res = await fetch('/api/config/injections');
+      const data = await res.json();
+      if (data.success) {
+        setInjections(data.injections);
+        if (data.injections.length > 0 && !selectedInjection) {
+          setSelectedInjection(data.injections[0]);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load injections list:', err);
+    } finally {
+      setIsLoadingInjections(false);
+    }
+  };
+
+  const handleTestInjection = async (id: string) => {
+    try {
+      setIsExecutingTest(true);
+      setTestExecutionOutput(null);
+      const tokenToUse = firebaseToken || '';
+      const res = await fetch('/api/config/execute-test-call', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${tokenToUse}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ injectionId: id })
+      });
+      const data = await res.json();
+      setTestExecutionOutput(data);
+      if (firebaseToken) {
+        loadAuditLogs(firebaseToken);
+      }
+    } catch (err) {
+      console.error('Failed to test injection:', err);
+    } finally {
+      setIsExecutingTest(false);
+    }
+  };
+
+  const handleLoadDnsRecords = async () => {
+    try {
+      setIsLoadingDns(true);
+      const res = await fetch('/api/namecheap/dns', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          domain: dnsDomain,
+          apiUser: dnsApiUser,
+          apiKey: dnsApiKey
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setDnsRecords(data.records);
+      }
+    } catch (err) {
+      console.error('Failed to load DNS records:', err);
+    } finally {
+      setIsLoadingDns(false);
+    }
+  };
+
+  const handleDeployVercelStaging = async () => {
+    try {
+      setIsDeployingVercel(true);
+      setVercelLogs([]);
+      setVercelUrl('');
+      
+      const res = await fetch('/api/vercel/deploy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          vercelToken,
+          projectId: vercelProjectId
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        if (data.isReal) {
+          setVercelLogs([`[REAL VERCEL BUILD] Initiated successfully! Deployment ID: ${data.deployment.id}`, `Target URL: ${data.deployment.url}`]);
+          setVercelUrl(`https://${data.deployment.url}`);
+          setIsDeployingVercel(false);
+        } else {
+          let logIdx = 0;
+          const interval = setInterval(() => {
+            if (logIdx < data.logs.length) {
+              setVercelLogs(prev => [...prev, data.logs[logIdx]]);
+              logIdx++;
+            } else {
+              clearInterval(interval);
+              setVercelUrl(data.url);
+              setIsDeployingVercel(false);
+            }
+          }, 250);
+          return;
+        }
+      }
+    } catch (err) {
+      console.error('Failed to deploy staging build:', err);
+      setIsDeployingVercel(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'integrations') {
+      loadInjections();
+      handleLoadDnsRecords();
+    }
+  }, [activeTab]);
 
   // Firebase auth listener setup
   useEffect(() => {
@@ -1136,6 +1278,12 @@ Microfyxd is an advanced, high-assurance multi-agent platform orchestrated stric
                 className={`px-4 py-3 flex items-center gap-1.5 border-r border-gray-800 font-semibold cursor-pointer transition ${activeTab === 'workspace' ? 'bg-[#0b0c13] text-indigo-400 border-t-2 border-t-indigo-500' : 'text-gray-400 hover:bg-gray-900'}`}
               >
                 <Settings className="w-3.5 h-3.5 text-indigo-400" /> WORKSPACE
+              </button>
+              <button 
+                onClick={() => setActiveTab('integrations')}
+                className={`px-4 py-3 flex items-center gap-1.5 border-r border-gray-800 font-semibold cursor-pointer transition ${activeTab === 'integrations' ? 'bg-[#0b0c13] text-indigo-400 border-t-2 border-t-indigo-500' : 'text-gray-400 hover:bg-gray-900'}`}
+              >
+                <Globe className="w-3.5 h-3.5 text-indigo-400 animate-pulse" /> INTEGRATIONS
               </button>
             </div>
 
@@ -2479,6 +2627,483 @@ Microfyxd is an advanced, high-assurance multi-agent platform orchestrated stric
                                 <span className="text-gray-400 text-[10px] leading-relaxed">{log.details}</span>
                               </div>
                             ))}
+                          </div>
+                        )}
+                      </div>
+
+                    </div>
+                  )}
+
+                </div>
+              )}
+
+              {/* TAB 10: INTEGRATIONS */}
+              {activeTab === 'integrations' && (
+                <div className="flex flex-col gap-5 text-xs animate-fadeIn">
+                  
+                  {/* HEADER */}
+                  <div className="flex items-center justify-between border-b border-gray-800/40 pb-3">
+                    <div className="flex flex-col gap-1">
+                      <h2 className="text-sm font-bold text-white flex items-center gap-2">
+                        <Globe className="w-4 h-4 text-indigo-400" />
+                        Microfyxd Core Integrations Node
+                      </h2>
+                      <p className="text-[10px] text-gray-500 font-mono">
+                        Manage 34 runtime API injections, configure Namecheap DNS records, and trigger staging builds on Vercel.
+                      </p>
+                    </div>
+                    
+                    {/* SUB-SECTIONS SELECTOR */}
+                    <div className="flex items-center gap-1.5 bg-[#090b11] border border-gray-850 p-1 rounded-lg">
+                      <button
+                        onClick={() => setActiveSubSection('injections')}
+                        className={`px-3 py-1.5 rounded font-mono font-bold cursor-pointer transition ${activeSubSection === 'injections' ? 'bg-indigo-950/40 text-indigo-400 border border-indigo-900/50' : 'text-gray-500 hover:text-gray-300'}`}
+                      >
+                        Core-T Injections
+                      </button>
+                      <button
+                        onClick={() => setActiveSubSection('namecheap')}
+                        className={`px-3 py-1.5 rounded font-mono font-bold cursor-pointer transition ${activeSubSection === 'namecheap' ? 'bg-indigo-950/40 text-indigo-400 border border-indigo-900/50' : 'text-gray-500 hover:text-gray-300'}`}
+                      >
+                        Namecheap DNS
+                      </button>
+                      <button
+                        onClick={() => setActiveSubSection('vercel')}
+                        className={`px-3 py-1.5 rounded font-mono font-bold cursor-pointer transition ${activeSubSection === 'vercel' ? 'bg-indigo-950/40 text-indigo-400 border border-indigo-900/50' : 'text-gray-500 hover:text-gray-300'}`}
+                      >
+                        Vercel Staging
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* SUB-SECTION 1: CORE-T INJECTIONS */}
+                  {activeSubSection === 'injections' && (
+                    <div className="grid grid-cols-12 gap-5">
+                      
+                      {/* LEFT COLUMN: SEARCH & LIST OF INJECTIONS (col-span-7) */}
+                      <div className="col-span-12 lg:col-span-7 bg-[#0a0c13] border border-gray-800/40 rounded-xl p-4 flex flex-col gap-3.5 shadow-sm">
+                        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-850 pb-2.5">
+                          <span className="text-xs font-mono font-bold text-white flex items-center gap-1.5 uppercase">
+                            <CloudLightning className="w-4 h-4 text-indigo-400" />
+                            Core T-API Injection Stream (34 API Calls)
+                          </span>
+                          
+                          {/* CATEGORY FILTER SELECTOR */}
+                          <select
+                            value={categoryFilter}
+                            onChange={(e) => setCategoryFilter(e.target.value)}
+                            className="bg-[#05060a] border border-gray-850 text-gray-400 rounded px-2.5 py-1 text-[10px] font-mono outline-none"
+                          >
+                            <option value="All">All Categories</option>
+                            <option value="ECU Engine">ECU Engine</option>
+                            <option value="Sandbox">Sandbox</option>
+                            <option value="Infrastructure">Infrastructure</option>
+                            <option value="Phenotype">Phenotype</option>
+                            <option value="Watchdog">Watchdog</option>
+                            <option value="Memory">Memory</option>
+                            <option value="Database">Database</option>
+                            <option value="Workspace">Workspace</option>
+                            <option value="DNS & Domains">DNS & Domains</option>
+                            <option value="Deployment">Deployment</option>
+                          </select>
+                        </div>
+
+                        {/* SEARCH INPUT */}
+                        <div className="relative">
+                          <Search className="w-3.5 h-3.5 text-gray-500 absolute left-3 top-2.5" />
+                          <input
+                            type="text"
+                            placeholder="Search 34 runtime API paths, variables, or descriptions..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="w-full bg-[#05060a] border border-gray-850 rounded px-8 py-2 text-[10.5px] font-mono text-gray-300 placeholder-gray-600 outline-none focus:border-indigo-500/50 transition"
+                          />
+                        </div>
+
+                        {/* LIST OF INJECTIONS */}
+                        <div className="flex flex-col gap-1.5 max-h-[460px] overflow-y-auto pr-1">
+                          {isLoadingInjections ? (
+                            <div className="text-center py-8 text-gray-500 font-mono">Loading core API map...</div>
+                          ) : (
+                            (() => {
+                              const filtered = injections.filter(inj => {
+                                const matchesSearch = inj.path.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                                                     inj.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                                                     inj.sourceVariable.toLowerCase().includes(searchQuery.toLowerCase());
+                                const matchesCat = categoryFilter === 'All' || inj.category === categoryFilter;
+                                return matchesSearch && matchesCat;
+                              });
+
+                              if (filtered.length === 0) {
+                                return <div className="text-center py-8 text-gray-500 font-mono">No injections match the filter criteria.</div>;
+                              }
+
+                              return filtered.map(inj => (
+                                <button
+                                  key={inj.id}
+                                  onClick={() => {
+                                    setSelectedInjection(inj);
+                                    setTestExecutionOutput(null);
+                                  }}
+                                  className={`w-full p-2.5 text-left rounded-lg border cursor-pointer transition flex items-center justify-between gap-4 ${selectedInjection?.id === inj.id ? 'bg-indigo-950/20 border-indigo-500/40 shadow-sm' : 'bg-[#05060a] border-gray-900/60 hover:bg-gray-900/40'}`}
+                                >
+                                  <div className="flex flex-col gap-1 overflow-hidden">
+                                    <div className="flex items-center gap-1.5">
+                                      <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded ${inj.method === 'GET' ? 'bg-emerald-950 text-emerald-400 border border-emerald-900/40' : 'bg-blue-950 text-blue-400 border border-blue-900/40'}`}>
+                                        {inj.method}
+                                      </span>
+                                      <span className="font-mono text-[11px] font-semibold text-white tracking-tight truncate">{inj.path}</span>
+                                    </div>
+                                    <span className="text-[9.5px] text-gray-500 font-mono truncate">{inj.description}</span>
+                                  </div>
+                                  <div className="flex items-center gap-2 shrink-0">
+                                    <span className="text-[8.5px] font-mono px-1.5 py-0.5 bg-gray-900/60 text-gray-400 border border-gray-800 rounded">
+                                      {inj.category}
+                                    </span>
+                                    {inj.isConfigured ? (
+                                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" title="Ready & Configured" />
+                                    ) : (
+                                      <span className="w-2 h-2 rounded-full bg-amber-500" title="Proxy Sandbox Mode Active" />
+                                    )}
+                                  </div>
+                                </button>
+                              ));
+                            })()
+                          )}
+                        </div>
+                      </div>
+
+                      {/* RIGHT COLUMN: INJECTION CONFIG & LIVE EXECUTOR (col-span-5) */}
+                      <div className="col-span-12 lg:col-span-5 flex flex-col gap-5">
+                        
+                        {/* INJECTION DETAILS PANEL */}
+                        <div className="bg-[#0a0c13] border border-gray-800/40 rounded-xl p-4 flex flex-col gap-3.5 shadow-sm">
+                          <span className="text-xs font-mono font-bold text-white flex items-center gap-1.5 uppercase border-b border-gray-850 pb-2.5">
+                            <Settings className="w-4 h-4 text-indigo-400" />
+                            Injection Configuration Parameters
+                          </span>
+
+                          {selectedInjection ? (
+                            <div className="flex flex-col gap-3">
+                              <div className="p-3 bg-[#05060a] border border-gray-900 rounded-lg flex flex-col gap-2 font-mono">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-gray-500 text-[10px]">INJECTION PATH:</span>
+                                  <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${selectedInjection.method === 'GET' ? 'bg-emerald-950 text-emerald-400 border border-emerald-900/40' : 'bg-blue-950 text-blue-400 border border-blue-900/40'}`}>{selectedInjection.method}</span>
+                                </div>
+                                <span className="text-white text-[11px] font-bold">{selectedInjection.path}</span>
+                              </div>
+
+                              <div className="p-3 bg-[#05060a] border border-gray-900 rounded-lg flex flex-col gap-2 font-mono">
+                                <span className="text-gray-500 text-[10px]">ENVIRONMENT VARIABLE OVERRIDE:</span>
+                                <span className="text-indigo-400 text-[11px] font-bold truncate">{selectedInjection.sourceVariable}</span>
+                                <div className="flex items-center gap-1.5 mt-1">
+                                  <span className="text-[9px] text-gray-500">Status:</span>
+                                  {selectedInjection.isConfigured ? (
+                                    <span className="text-[9px] text-emerald-400 font-bold bg-emerald-950/20 px-1.5 py-0.5 border border-emerald-900/40 rounded">Injected at Runtime</span>
+                                  ) : (
+                                    <span className="text-[9px] text-amber-400 font-bold bg-amber-950/20 px-1.5 py-0.5 border border-amber-900/40 rounded">Sandboxed Proxy Mode (Active)</span>
+                                  )}
+                                </div>
+                              </div>
+
+                              <div className="p-3 bg-[#05060a] border border-gray-900 rounded-lg flex flex-col gap-1.5 font-mono">
+                                <span className="text-gray-500 text-[10px]">FUNCTIONAL SCOPE:</span>
+                                <p className="text-gray-400 text-[10px] leading-relaxed font-sans">{selectedInjection.description}</p>
+                              </div>
+
+                              {/* DRY-RUN EXECUTOR BUTTON */}
+                              <button
+                                onClick={() => handleTestInjection(selectedInjection.id)}
+                                disabled={isExecutingTest}
+                                className="w-full bg-indigo-600 hover:bg-indigo-500 disabled:bg-gray-800 text-white font-semibold py-2.5 rounded-lg font-mono tracking-tight cursor-pointer transition flex items-center justify-center gap-2 border border-indigo-400/20"
+                              >
+                                {isExecutingTest ? (
+                                  <>
+                                    <RefreshCw className="w-3.5 h-3.5 animate-spin" /> EXECUTING SECURE PROXY TEST...
+                                  </>
+                                ) : (
+                                  <>
+                                    <Play className="w-3.5 h-3.5" /> TRIGGER RUNTIME INJECTION TEST
+                                  </>
+                                )}
+                              </button>
+                            </div>
+                          ) : (
+                            <p className="text-gray-500 text-center py-8 font-mono text-[10px]">Select an injection from the stream to configure.</p>
+                          )}
+                        </div>
+
+                        {/* LIVE EXECUTION CONSOLE RESPONSE */}
+                        <div className="bg-[#0a0c13] border border-gray-800/40 rounded-xl p-4 flex flex-col gap-3.5 shadow-sm flex-1 min-h-[160px]">
+                          <span className="text-xs font-mono font-bold text-white flex items-center gap-1.5 uppercase border-b border-gray-850 pb-2.5">
+                            <Terminal className="w-4 h-4 text-indigo-400" />
+                            Live Telemetry Verification Feed
+                          </span>
+
+                          {testExecutionOutput ? (
+                            <div className="flex flex-col gap-2 font-mono text-[10px] flex-1">
+                              <div className="flex justify-between items-center text-[9px] border-b border-gray-900 pb-1.5">
+                                <span className="text-gray-500">TIMESTAMP: {new Date(testExecutionOutput.timestamp).toLocaleTimeString()}</span>
+                                <span className="text-emerald-400 font-bold bg-emerald-950 px-1.5 py-0.5 border border-emerald-900 rounded">{testExecutionOutput.status}</span>
+                              </div>
+                              <pre className="p-2.5 bg-[#05060a] border border-gray-900 rounded text-gray-400 text-[9.5px] overflow-auto flex-1 max-h-[140px] leading-relaxed whitespace-pre-wrap">
+                                {JSON.stringify(testExecutionOutput.payload, null, 2)}
+                              </pre>
+                              <span className="text-[9px] text-gray-500 italic mt-1 text-center">✔ Verification event committed to Cloud SQL audit table successfully.</span>
+                            </div>
+                          ) : (
+                            <div className="flex flex-col items-center justify-center py-8 text-gray-600 gap-1 font-mono text-[10px] flex-1">
+                              <Terminal className="w-6 h-6 text-gray-850" />
+                              <span>Console inactive. Trigger an injection.</span>
+                            </div>
+                          )}
+                        </div>
+
+                      </div>
+                    </div>
+                  )}
+
+                  {/* SUB-SECTION 2: NAMECHEAP DNS */}
+                  {activeSubSection === 'namecheap' && (
+                    <div className="grid grid-cols-12 gap-5">
+                      
+                      {/* CONFIGURATION FORM */}
+                      <div className="col-span-12 lg:col-span-5 bg-[#0a0c13] border border-gray-800/40 rounded-xl p-4 flex flex-col gap-3.5 shadow-sm">
+                        <span className="text-xs font-mono font-bold text-white flex items-center gap-1.5 uppercase border-b border-gray-850 pb-2.5">
+                          <Settings className="w-4 h-4 text-indigo-400" />
+                          Namecheap API Connector Settings
+                        </span>
+
+                        <div className="flex flex-col gap-3 font-mono">
+                          <div className="flex flex-col gap-1">
+                            <label className="text-[10px] text-gray-500 font-bold">NAMECHEAP REGISTERED DOMAIN:</label>
+                            <input
+                              type="text"
+                              value={dnsDomain}
+                              onChange={(e) => setDnsDomain(e.target.value)}
+                              className="bg-[#05060a] border border-gray-850 text-white rounded px-3 py-2 text-[10.5px] outline-none focus:border-indigo-500/50"
+                              placeholder="microfyxd.com"
+                            />
+                          </div>
+
+                          <div className="flex flex-col gap-1">
+                            <label className="text-[10px] text-gray-500 font-bold">NAMECHEAP API USER (OPTIONAL):</label>
+                            <input
+                              type="text"
+                              value={dnsApiUser}
+                              onChange={(e) => setDnsApiUser(e.target.value)}
+                              className="bg-[#05060a] border border-gray-850 text-white rounded px-3 py-2 text-[10.5px] outline-none focus:border-indigo-500/50"
+                              placeholder="e.g. microfyxd_admin"
+                            />
+                          </div>
+
+                          <div className="flex flex-col gap-1">
+                            <label className="text-[10px] text-gray-500 font-bold">NAMECHEAP API KEY (OPTIONAL):</label>
+                            <input
+                              type="password"
+                              value={dnsApiKey}
+                              onChange={(e) => setDnsApiKey(e.target.value)}
+                              className="bg-[#05060a] border border-gray-850 text-white rounded px-3 py-2 text-[10.5px] outline-none focus:border-indigo-500/50"
+                              placeholder="••••••••••••••••"
+                            />
+                          </div>
+
+                          <button
+                            onClick={handleLoadDnsRecords}
+                            disabled={isLoadingDns}
+                            className="w-full bg-indigo-600 hover:bg-indigo-500 disabled:bg-gray-850 text-white font-bold py-2 rounded font-mono cursor-pointer transition flex items-center justify-center gap-2 border border-indigo-400/20"
+                          >
+                            {isLoadingDns ? (
+                              <>
+                                <RefreshCw className="w-3.5 h-3.5 animate-spin" /> RESOLVING DNS ENTRIES...
+                              </>
+                            ) : (
+                              <>
+                                <RefreshCw className="w-3.5 h-3.5" /> RETRIEVE LIVE DNS RECORDS
+                              </>
+                            )}
+                          </button>
+                        </div>
+
+                        {/* NAMECHEAP INSTRUCTIONS */}
+                        <div className="p-3 bg-[#05060a] border border-gray-900 rounded-lg flex flex-col gap-2 mt-2">
+                          <span className="text-[10.5px] font-bold font-mono text-indigo-400 flex items-center gap-1">
+                            <Info className="w-3.5 h-3.5 shrink-0" />
+                            Retrieving Namecheap DNS API Keys
+                          </span>
+                          <ol className="list-decimal pl-4 text-gray-500 text-[10px] space-y-1 leading-relaxed">
+                            <li>Log in to your <strong>Namecheap.com</strong> account.</li>
+                            <li>Navigate to <strong>Profile &gt; Tools &gt; Namecheap API Document Options</strong>.</li>
+                            <li>Enable <strong>API Access</strong> and copy your key token.</li>
+                            <li>Whitelist your current staging build client IP address in Namecheap console.</li>
+                            <li>Save credentials inside your project's server configuration.</li>
+                          </ol>
+                        </div>
+                      </div>
+
+                      {/* ACTIVE RECORDS CONTAINER (col-span-7) */}
+                      <div className="col-span-12 lg:col-span-7 bg-[#0a0c13] border border-gray-800/40 rounded-xl p-4 flex flex-col gap-3.5 shadow-sm">
+                        <span className="text-xs font-mono font-bold text-white flex items-center gap-1.5 uppercase border-b border-gray-850 pb-2.5">
+                          <Link2 className="w-4 h-4 text-indigo-400" />
+                          DNS Zone Records for {dnsDomain}
+                        </span>
+
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-left border-collapse font-mono text-[10px]">
+                            <thead>
+                              <tr className="border-b border-gray-850 text-gray-500 uppercase tracking-wider">
+                                <th className="pb-2">Type</th>
+                                <th className="pb-2">Host/Name</th>
+                                <th className="pb-2">Value/Address</th>
+                                <th className="pb-2 text-right">TTL</th>
+                                <th className="pb-2 text-right">Status</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {dnsRecords.length === 0 ? (
+                                <tr>
+                                  <td colSpan={5} className="text-center py-12 text-gray-500">
+                                    Click 'Retrieve' to verify live active domain records.
+                                  </td>
+                                </tr>
+                              ) : (
+                                dnsRecords.map((rec, idx) => (
+                                  <tr key={idx} className="border-b border-gray-900 text-gray-300 hover:bg-gray-900/30">
+                                    <td className="py-2.5">
+                                      <span className="px-1.5 py-0.5 bg-gray-900 border border-gray-800 text-white rounded font-bold">{rec.type}</span>
+                                    </td>
+                                    <td className="py-2.5 font-bold">{rec.name}</td>
+                                    <td className="py-2.5 text-gray-400 break-all">{rec.address}</td>
+                                    <td className="py-2.5 text-right text-gray-500">{rec.ttl}s</td>
+                                    <td className="py-2.5 text-right">
+                                      <span className={`px-1.5 py-0.5 rounded font-bold text-[9px] ${rec.status.includes('Active') ? 'bg-emerald-950/20 text-emerald-400 border border-emerald-900/40' : 'bg-indigo-950/20 text-indigo-400 border border-indigo-900/40'}`}>
+                                        {rec.status}
+                                      </span>
+                                    </td>
+                                  </tr>
+                                ))
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
+
+                        {dnsRecords.length > 0 && (
+                          <div className="mt-auto p-2.5 bg-indigo-950/10 border border-indigo-900/30 rounded text-[10px] text-gray-400 leading-relaxed font-sans">
+                            <strong>✔ Vercel Sub-Domain Mapping:</strong> Map your staging sub-domains (e.g. <code>staged.{dnsDomain}</code>) to Vercel's Edge Server <code>76.76.21.21</code> by setting an A record. The active zone files are verified using secure lookup pipelines.
+                          </div>
+                        )}
+                      </div>
+
+                    </div>
+                  )}
+
+                  {/* SUB-SECTION 3: VERCEL STAGING */}
+                  {activeSubSection === 'vercel' && (
+                    <div className="grid grid-cols-12 gap-5">
+                      
+                      {/* VERCEL CREDENTIALS & DEPLOY CONTROLLER */}
+                      <div className="col-span-12 lg:col-span-5 bg-[#0a0c13] border border-gray-800/40 rounded-xl p-4 flex flex-col gap-3.5 shadow-sm">
+                        <span className="text-xs font-mono font-bold text-white flex items-center gap-1.5 uppercase border-b border-gray-850 pb-2.5">
+                          <Settings className="w-4 h-4 text-indigo-400" />
+                          Vercel Credentials (microfyxd-site)
+                        </span>
+
+                        <div className="flex flex-col gap-3 font-mono">
+                          <div className="flex flex-col gap-1">
+                            <label className="text-[10px] text-gray-500 font-bold">VERCEL API ACCESS TOKEN (OPTIONAL):</label>
+                            <input
+                              type="password"
+                              value={vercelToken}
+                              onChange={(e) => setVercelToken(e.target.value)}
+                              className="bg-[#05060a] border border-gray-850 text-white rounded px-3 py-2 text-[10.5px] outline-none focus:border-indigo-500/50"
+                              placeholder="••••••••••••••••"
+                            />
+                          </div>
+
+                          <div className="flex flex-col gap-1">
+                            <label className="text-[10px] text-gray-500 font-bold">VERCEL PROJECT ID (OPTIONAL):</label>
+                            <input
+                              type="text"
+                              value={vercelProjectId}
+                              onChange={(e) => setVercelProjectId(e.target.value)}
+                              className="bg-[#05060a] border border-gray-850 text-white rounded px-3 py-2 text-[10.5px] outline-none focus:border-indigo-500/50"
+                              placeholder="e.g. prj_X9kL0jMh98P"
+                            />
+                          </div>
+
+                          <button
+                            onClick={handleDeployVercelStaging}
+                            disabled={isDeployingVercel}
+                            className="w-full bg-indigo-600 hover:bg-indigo-500 disabled:bg-gray-850 text-white font-bold py-2.5 rounded font-mono tracking-tight cursor-pointer transition flex items-center justify-center gap-2 border border-indigo-400/20"
+                          >
+                            {isDeployingVercel ? (
+                              <>
+                                <RefreshCw className="w-3.5 h-3.5 animate-spin" /> COMPILING STAGED CODEBASE...
+                              </>
+                            ) : (
+                              <>
+                                <Play className="w-3.5 h-3.5" /> DEPLOY TO VERCEL STAGING
+                              </>
+                            )}
+                          </button>
+                        </div>
+
+                        {/* HOW TO INJECT TO VERCEL CONFIG */}
+                        <div className="p-3 bg-[#05060a] border border-gray-900 rounded-lg flex flex-col gap-2 mt-2 leading-relaxed">
+                          <span className="text-[10.5px] font-bold font-mono text-indigo-400 flex items-center gap-1">
+                            <Info className="w-3.5 h-3.5" />
+                            Vercel Runtime Injections Guide
+                          </span>
+                          <p className="text-gray-500 text-[10px] font-sans">
+                            When linking <code>microfyxd-site</code>, you must configure all environment variables inside the Vercel Dashboard under <strong>Project Settings &gt; Environment Variables</strong>.
+                          </p>
+                          <p className="text-gray-500 text-[10px] font-sans">
+                            This microfyxd monorepo exposes dedicated Express endpoints acting as secure proxies to verify credentials safely before committing production changes.
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* VERCEL BUILD PROCESS TERMINAL & PREVIEW */}
+                      <div className="col-span-12 lg:col-span-7 bg-[#0a0c13] border border-gray-800/40 rounded-xl p-4 flex flex-col gap-3.5 shadow-sm min-h-[340px]">
+                        <span className="text-xs font-mono font-bold text-white flex items-center gap-1.5 uppercase border-b border-gray-850 pb-2.5">
+                          <Terminal className="w-4 h-4 text-indigo-400" />
+                          Vercel Build Execution Terminal
+                        </span>
+
+                        {/* LIVE TERMINAL FEED */}
+                        <div className="bg-[#05060a] border border-gray-900 rounded-xl p-3.5 font-mono text-[10.5px] text-gray-300 flex-1 flex flex-col gap-1.5 overflow-y-auto max-h-[300px] leading-relaxed">
+                          {vercelLogs.length === 0 ? (
+                            <div className="text-gray-650 flex flex-col items-center justify-center py-16 gap-2">
+                              <Terminal className="w-8 h-8 text-gray-850" />
+                              <span>Terminal ready. Awaiting staging compilation sequence...</span>
+                            </div>
+                          ) : (
+                            vercelLogs.map((log, idx) => {
+                              let color = 'text-gray-300';
+                              if (log.includes('[SUCCESS]')) color = 'text-emerald-400 font-bold';
+                              else if (log.includes('[CONFIG]')) color = 'text-indigo-400';
+                              else if (log.includes('[SYSTEM]')) color = 'text-amber-400';
+                              else if (log.includes('[BUILD]')) color = 'text-gray-400';
+                              return <div key={idx} className={color}>{log}</div>;
+                            })
+                          )}
+                        </div>
+
+                        {/* LIVE PREVIEW URL BLOCK */}
+                        {vercelUrl && (
+                          <div className="p-3 bg-emerald-950/20 border border-emerald-900/50 rounded-lg flex items-center justify-between gap-3 font-mono">
+                            <div className="flex flex-col gap-0.5">
+                              <span className="text-[9px] text-emerald-500 font-bold">✔ DEPLOYMENT LIVE ON VERCEL EDGE:</span>
+                              <span className="text-white text-[11px] font-bold truncate">{vercelUrl}</span>
+                            </div>
+                            <a
+                              href={vercelUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-[10px] font-bold flex items-center gap-1 shrink-0 cursor-pointer transition"
+                            >
+                              OPEN SITE <ExternalLink className="w-3 h-3" />
+                            </a>
                           </div>
                         )}
                       </div>

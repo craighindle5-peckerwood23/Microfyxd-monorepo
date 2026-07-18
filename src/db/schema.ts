@@ -1,5 +1,5 @@
 import { relations } from 'drizzle-orm';
-import { integer, pgTable, serial, text, timestamp } from 'drizzle-orm/pg-core';
+import { integer, pgTable, real, serial, text, timestamp } from 'drizzle-orm/pg-core';
 
 // Define the 'users' table.
 export const users = pgTable('users', {
@@ -54,3 +54,17 @@ export const auditLogsRelations = relations(auditLogs, ({ one }) => ({
     references: [users.id],
   }),
 }));
+
+// Define the 'agent_memory' table.
+export const agentMemory = pgTable('agent_memory', {
+  id: serial('id').primaryKey(),
+  tenantId: text('tenant_id').notNull(),
+  memoryType: text('memory_type').notNull(),
+  key: text('key').notNull(),
+  value: text('value').notNull(),
+  confidence: real('confidence').notNull().default(1.0),
+  accessCount: integer('access_count').notNull().default(0),
+  lastAccessed: timestamp('last_accessed').defaultNow(),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
