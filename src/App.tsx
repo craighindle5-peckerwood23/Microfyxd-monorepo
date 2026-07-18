@@ -56,7 +56,7 @@ interface MonorepoFile {
 
 export default function App() {
   // Navigation & UI state
-  const [activeTab, setActiveTab] = useState<'traces' | 'files' | 'phenotype' | 'ego' | 'infra' | 'sandbox' | 'memory' | 'doctrine' | 'workspace'>('traces');
+  const [activeTab, setActiveTab] = useState<'cockpit' | 'traces' | 'files' | 'phenotype' | 'ego' | 'infra' | 'sandbox' | 'memory' | 'doctrine' | 'workspace'>('cockpit');
   
   // Google Workspace & Firebase Auth state
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -1011,56 +1011,62 @@ Microfyxd is an advanced, high-assurance multi-agent platform orchestrated stric
             {/* TABS SELECTOR LIST */}
             <div className="bg-[#0e101b] border-b border-gray-800/80 flex flex-wrap text-xs font-mono">
               <button 
+                onClick={() => setActiveTab('cockpit')}
+                className={`px-4 py-3 flex items-center gap-1.5 border-r border-gray-800 font-bold cursor-pointer transition ${activeTab === 'cockpit' ? 'bg-[#12162d] text-indigo-400 border-t-2 border-t-indigo-500 shadow-inner' : 'text-gray-400 hover:bg-gray-900'}`}
+              >
+                <Sparkles className="w-3.5 h-3.5 text-indigo-400" /> CENTRAL COCKPIT
+              </button>
+              <button 
                 onClick={() => setActiveTab('traces')}
-                className={`px-4 py-3 flex items-center gap-1.5 border-r border-gray-800 font-semibold cursor-pointer ${activeTab === 'traces' ? 'bg-[#0b0c13] text-indigo-400 border-t-2 border-t-indigo-500' : 'text-gray-400 hover:bg-gray-900'}`}
+                className={`px-4 py-3 flex items-center gap-1.5 border-r border-gray-800 font-semibold cursor-pointer transition ${activeTab === 'traces' ? 'bg-[#0b0c13] text-indigo-400 border-t-2 border-t-indigo-500' : 'text-gray-400 hover:bg-gray-900'}`}
               >
                 <Eye className="w-3.5 h-3.5" /> TRACES
               </button>
               <button 
                 onClick={() => setActiveTab('files')}
-                className={`px-4 py-3 flex items-center gap-1.5 border-r border-gray-800 font-semibold cursor-pointer ${activeTab === 'files' ? 'bg-[#0b0c13] text-indigo-400 border-t-2 border-t-indigo-500' : 'text-gray-400 hover:bg-gray-900'}`}
+                className={`px-4 py-3 flex items-center gap-1.5 border-r border-gray-800 font-semibold cursor-pointer transition ${activeTab === 'files' ? 'bg-[#0b0c13] text-indigo-400 border-t-2 border-t-indigo-500' : 'text-gray-400 hover:bg-gray-900'}`}
               >
                 <FileCode className="w-3.5 h-3.5" /> MONOREPO
               </button>
               <button 
                 onClick={() => setActiveTab('phenotype')}
-                className={`px-4 py-3 flex items-center gap-1.5 border-r border-gray-800 font-semibold cursor-pointer ${activeTab === 'phenotype' ? 'bg-[#0b0c13] text-indigo-400 border-t-2 border-t-indigo-500' : 'text-gray-400 hover:bg-gray-900'}`}
+                className={`px-4 py-3 flex items-center gap-1.5 border-r border-gray-800 font-semibold cursor-pointer transition ${activeTab === 'phenotype' ? 'bg-[#0b0c13] text-indigo-400 border-t-2 border-t-indigo-500' : 'text-gray-400 hover:bg-gray-900'}`}
               >
                 <Compass className="w-3.5 h-3.5" /> PHENOTYPE
               </button>
               <button 
                 onClick={() => setActiveTab('infra')}
-                className={`px-4 py-3 flex items-center gap-1.5 border-r border-gray-800 font-semibold cursor-pointer ${activeTab === 'infra' ? 'bg-[#0b0c13] text-indigo-400 border-t-2 border-t-indigo-500' : 'text-gray-400 hover:bg-gray-900'}`}
+                className={`px-4 py-3 flex items-center gap-1.5 border-r border-gray-800 font-semibold cursor-pointer transition ${activeTab === 'infra' ? 'bg-[#0b0c13] text-indigo-400 border-t-2 border-t-indigo-500' : 'text-gray-400 hover:bg-gray-900'}`}
               >
                 <Cpu className="w-3.5 h-3.5" /> INFRASTRUCTURE
               </button>
               <button 
                 onClick={() => setActiveTab('ego')}
-                className={`px-4 py-3 flex items-center gap-1.5 border-r border-gray-800 font-semibold cursor-pointer ${activeTab === 'ego' ? 'bg-[#0b0c13] text-indigo-400 border-t-2 border-t-indigo-500' : 'text-gray-400 hover:bg-gray-900'}`}
+                className={`px-4 py-3 flex items-center gap-1.5 border-r border-gray-800 font-semibold cursor-pointer transition ${activeTab === 'ego' ? 'bg-[#0b0c13] text-indigo-400 border-t-2 border-t-indigo-500' : 'text-gray-400 hover:bg-gray-900'}`}
               >
                 <Brain className="w-3.5 h-3.5" /> EGO-SYSTEM
               </button>
               <button 
                 onClick={() => setActiveTab('sandbox')}
-                className={`px-4 py-3 flex items-center gap-1.5 border-r border-gray-800 font-semibold cursor-pointer ${activeTab === 'sandbox' ? 'bg-[#0b0c13] text-indigo-400 border-t-2 border-t-indigo-500' : 'text-gray-400 hover:bg-gray-900'}`}
+                className={`px-4 py-3 flex items-center gap-1.5 border-r border-gray-800 font-semibold cursor-pointer transition ${activeTab === 'sandbox' ? 'bg-[#0b0c13] text-indigo-400 border-t-2 border-t-indigo-500' : 'text-gray-400 hover:bg-gray-900'}`}
               >
                 <Code className="w-3.5 h-3.5" /> SANDBOX
               </button>
               <button 
                 onClick={() => setActiveTab('memory')}
-                className={`px-4 py-3 flex items-center gap-1.5 border-r border-gray-800 font-semibold cursor-pointer ${activeTab === 'memory' ? 'bg-[#0b0c13] text-indigo-400 border-t-2 border-t-indigo-500' : 'text-gray-400 hover:bg-gray-900'}`}
+                className={`px-4 py-3 flex items-center gap-1.5 border-r border-gray-800 font-semibold cursor-pointer transition ${activeTab === 'memory' ? 'bg-[#0b0c13] text-indigo-400 border-t-2 border-t-indigo-500' : 'text-gray-400 hover:bg-gray-900'}`}
               >
                 <Database className="w-3.5 h-3.5" /> MEMORY
               </button>
               <button 
                 onClick={() => setActiveTab('doctrine')}
-                className={`px-4 py-3 flex items-center gap-1.5 border-r border-gray-800 font-semibold cursor-pointer ${activeTab === 'doctrine' ? 'bg-[#0b0c13] text-indigo-400 border-t-2 border-t-indigo-500' : 'text-gray-400 hover:bg-gray-900'}`}
+                className={`px-4 py-3 flex items-center gap-1.5 border-r border-gray-800 font-semibold cursor-pointer transition ${activeTab === 'doctrine' ? 'bg-[#0b0c13] text-indigo-400 border-t-2 border-t-indigo-500' : 'text-gray-400 hover:bg-gray-900'}`}
               >
                 <Shield className="w-3.5 h-3.5" /> DOCTRINE
               </button>
               <button 
                 onClick={() => setActiveTab('workspace')}
-                className={`px-4 py-3 flex items-center gap-1.5 border-r border-gray-800 font-semibold cursor-pointer ${activeTab === 'workspace' ? 'bg-[#0b0c13] text-indigo-400 border-t-2 border-t-indigo-500 animate-pulse' : 'text-gray-400 hover:bg-gray-900'}`}
+                className={`px-4 py-3 flex items-center gap-1.5 border-r border-gray-800 font-semibold cursor-pointer transition ${activeTab === 'workspace' ? 'bg-[#0b0c13] text-indigo-400 border-t-2 border-t-indigo-500' : 'text-gray-400 hover:bg-gray-900'}`}
               >
                 <Settings className="w-3.5 h-3.5 text-indigo-400" /> WORKSPACE
               </button>
@@ -1068,7 +1074,287 @@ Microfyxd is an advanced, high-assurance multi-agent platform orchestrated stric
 
             {/* TAB CONTAINER BODY */}
             <div className="flex-1 overflow-y-auto p-5">
-              
+
+              {/* TAB 0: UNIFIED COCKPIT DASHBOARD */}
+              {activeTab === 'cockpit' && (
+                <div className="flex flex-col gap-6 text-xs animate-fadeIn">
+                  
+                  {/* COCKPIT STATUS HEADER BANNER */}
+                  <div className="bg-gradient-to-r from-indigo-950/40 via-[#0a0c13] to-purple-950/20 border border-indigo-500/10 rounded-xl p-4 flex flex-wrap items-center justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-indigo-500/10 rounded-lg text-indigo-400">
+                        <Sparkles className="w-5 h-5 animate-pulse" />
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-bold text-white uppercase tracking-tight">Enterprise Multi-System Operational Cockpit</h4>
+                        <p className="text-[11px] text-gray-400 mt-0.5">Continuous telemetry, automatic VRAM rebalancing, self-healing, and Google Workspace pipelines</p>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-mono px-2 py-1 bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 rounded">
+                        TIER {arcanaTier} ENFORCED
+                      </span>
+                      <span className="text-[10px] font-mono px-2 py-1 bg-purple-500/10 text-purple-300 border border-purple-500/20 rounded uppercase">
+                        {hardwareOverride} Descriptors
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* MAIN BENTO GRID */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    
+                    {/* WIDGET A: HIGH-ASSURANCE GPU CLUSTER VRAM MANAGER */}
+                    <div className="bg-[#0a0c13] border border-gray-800/50 rounded-xl p-4 flex flex-col gap-4">
+                      <div className="flex items-center justify-between border-b border-gray-850 pb-2">
+                        <h5 className="font-mono font-bold text-white flex items-center gap-1.5 uppercase">
+                          <Cpu className="w-4 h-4 text-indigo-400 animate-spin-slow" />
+                          GPU Core Workload Reroute
+                        </h5>
+                        <button 
+                          onClick={() => setActiveTab('infra')}
+                          className="text-[10px] font-mono text-indigo-400 hover:text-indigo-300 flex items-center gap-0.5"
+                        >
+                          Details <ChevronRight className="w-3 h-3" />
+                        </button>
+                      </div>
+
+                      <div className="grid grid-cols-4 gap-2">
+                        {gpuCluster.map((gpu) => (
+                          <div 
+                            key={gpu.id}
+                            className={`p-2 rounded bg-black/30 border text-center transition ${selectedGpuId === gpu.id ? 'border-indigo-500 bg-indigo-950/10' : 'border-gray-850'}`}
+                            onClick={() => setSelectedGpuId(gpu.id)}
+                          >
+                            <span className="text-[9px] font-mono text-gray-400 block uppercase">{gpu.id}</span>
+                            <span className="font-bold text-[11px] text-white block mt-0.5">{gpu.vramUsed}G</span>
+                            <span className="text-[8px] font-mono text-indigo-400">{gpu.temp}°C</span>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* QUICK WORKLOAD MIGRATE FORM */}
+                      <div className="bg-black/25 rounded-lg p-3 border border-gray-850 flex flex-col gap-2.5">
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <span className="text-[9px] text-gray-500 uppercase block font-mono mb-1">Source Node</span>
+                            <select 
+                              value={rerouteSource}
+                              onChange={(e) => setRerouteSource(e.target.value)}
+                              className="w-full bg-[#05060a] border border-gray-800 rounded px-2 py-1 text-[11px] text-gray-300 font-mono outline-none"
+                            >
+                              {gpuCluster.map(gpu => (
+                                <option key={gpu.id} value={gpu.id}>{gpu.id.toUpperCase()} ({gpu.vramUsed} GB)</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <span className="text-[9px] text-gray-500 uppercase block font-mono mb-1">Target Node</span>
+                            <select 
+                              value={rerouteDest}
+                              onChange={(e) => setRerouteDest(e.target.value)}
+                              className="w-full bg-[#05060a] border border-gray-800 rounded px-2 py-1 text-[11px] text-gray-300 font-mono outline-none"
+                            >
+                              {gpuCluster.map(gpu => (
+                                <option key={gpu.id} value={gpu.id}>{gpu.id.toUpperCase()} ({gpu.vramTotal - gpu.vramUsed} GB Free)</option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+
+                        <div>
+                          <div className="flex justify-between text-[9px] font-mono mb-1">
+                            <span className="text-gray-500">TRANSFER SIZE:</span>
+                            <span className="text-indigo-400 font-bold">{rerouteAmount} GB</span>
+                          </div>
+                          <input 
+                            type="range"
+                            min="5"
+                            max="40"
+                            step="5"
+                            value={rerouteAmount}
+                            onChange={(e) => setRerouteAmount(Number(e.target.value))}
+                            className="w-full accent-indigo-500 bg-gray-800 h-1 rounded"
+                          />
+                        </div>
+
+                        {isRerouting ? (
+                          <div className="bg-[#05060a] p-2 rounded text-center border border-indigo-950 font-mono text-[10px]">
+                            <div className="text-indigo-400 font-bold animate-pulse">⚡ {rerouteStatus} ({rerouteProgress}%)</div>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={handleGpuReroute}
+                            className="w-full bg-indigo-600/25 hover:bg-indigo-600/35 text-indigo-300 border border-indigo-500/30 text-[10px] font-mono py-1.5 rounded transition font-bold cursor-pointer"
+                          >
+                            ⚡ INSTANT MEMORY REROUTE
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* WIDGET B: ISOLATED RUNTIME SANDBOX COGNITION & AUTO-REPAIR */}
+                    <div className="bg-[#0a0c13] border border-gray-800/50 rounded-xl p-4 flex flex-col gap-4">
+                      <div className="flex items-center justify-between border-b border-gray-850 pb-2">
+                        <h5 className="font-mono font-bold text-white flex items-center gap-1.5 uppercase">
+                          <Code className="w-4 h-4 text-purple-400" />
+                          Isolated Sandbox Self-Repair
+                        </h5>
+                        <button 
+                          onClick={() => setActiveTab('sandbox')}
+                          className="text-[10px] font-mono text-purple-400 hover:text-purple-300 flex items-center gap-0.5"
+                        >
+                          Details <ChevronRight className="w-3 h-3" />
+                        </button>
+                      </div>
+
+                      <div className="flex flex-col gap-2">
+                        <span className="text-[10px] font-mono text-gray-500">SCRATCHPAD FAULT INJECTOR (ACTIVE)</span>
+                        <div className="bg-black/30 border border-gray-850 rounded p-2.5 font-mono text-[10px] text-purple-300 max-h-[100px] overflow-y-auto leading-relaxed">
+                          <pre>{sandboxCode}</pre>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2 mt-auto">
+                        <button
+                          onClick={async () => {
+                            const res = await fetch('/api/sandbox/eval', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ code: sandboxCode })
+                            });
+                            const data = await res.json();
+                            if (data.result.syntaxOk) {
+                              alert('Sandbox verification: Valid syntax!');
+                            } else {
+                              alert(`Sandbox verification: Syntax failed! Root: ${data.result.error}`);
+                            }
+                          }}
+                          className="bg-gray-800/50 hover:bg-gray-800 border border-gray-700 text-gray-300 font-mono text-[10px] py-1.5 rounded transition cursor-pointer"
+                        >
+                          Check Syntax
+                        </button>
+                        <button
+                          disabled={isRunning}
+                          onClick={() => {
+                            runLangGraphFlow('Diagnose, compile, and self-heal the broken Sandbox typescript snippet.', sandboxCode);
+                          }}
+                          className="bg-purple-600/20 hover:bg-purple-600/30 text-purple-200 border border-purple-500/30 font-mono text-[10px] py-1.5 rounded transition font-bold cursor-pointer"
+                        >
+                          ✨ Auto-Heal Code
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* WIDGET C: SECURE GOOGLE WORKSPACE BRIDGE */}
+                    <div className="bg-[#0a0c13] border border-gray-800/50 rounded-xl p-4 flex flex-col gap-4">
+                      <div className="flex items-center justify-between border-b border-gray-850 pb-2">
+                        <h5 className="font-mono font-bold text-white flex items-center gap-1.5 uppercase">
+                          <Settings className="w-4 h-4 text-emerald-400" />
+                          Secure Workspace Sync
+                        </h5>
+                        <button 
+                          onClick={() => setActiveTab('workspace')}
+                          className="text-[10px] font-mono text-emerald-400 hover:text-emerald-300 flex items-center gap-0.5"
+                        >
+                          Console <ChevronRight className="w-3 h-3" />
+                        </button>
+                      </div>
+
+                      {currentUser ? (
+                        <div className="flex flex-col gap-3">
+                          <div className="flex items-center justify-between p-2 rounded bg-emerald-500/5 border border-emerald-500/10">
+                            <div className="flex items-center gap-2">
+                              {currentUser.photoURL ? (
+                                <img src={currentUser.photoURL} alt="avatar" className="w-5 h-5 rounded-full" referrerPolicy="no-referrer" />
+                              ) : (
+                                <UserCheck className="w-4 h-4 text-emerald-400" />
+                              )}
+                              <span className="text-[11px] font-mono text-white truncate max-w-[170px]">{currentUser.email}</span>
+                            </div>
+                            <button
+                              onClick={handleGoogleSignOut}
+                              className="text-[9px] font-mono bg-rose-950/30 text-rose-300 hover:bg-rose-950/50 px-2 py-0.5 rounded border border-rose-900/20"
+                            >
+                              DISCONNECT
+                            </button>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-3 text-[10px]">
+                            {/* Gmail count */}
+                            <div className="bg-[#05060a] p-2.5 rounded border border-gray-850">
+                              <div className="flex justify-between items-center text-gray-400 font-mono mb-1.5">
+                                <span>INBOX FEED</span>
+                                <Mail className="w-3.5 h-3.5 text-indigo-400" />
+                              </div>
+                              <span className="text-white font-bold text-xs">{emails.length} Emails synced</span>
+                            </div>
+                            {/* Drive count */}
+                            <div className="bg-[#05060a] p-2.5 rounded border border-gray-850">
+                              <div className="flex justify-between items-center text-gray-400 font-mono mb-1.5">
+                                <span>DRIVE DIRECTORY</span>
+                                <File className="w-3.5 h-3.5 text-emerald-400" />
+                              </div>
+                              <span className="text-white font-bold text-xs">{driveFiles.length} Metadata items</span>
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="text-center py-4 flex flex-col items-center justify-center gap-2">
+                          <p className="text-gray-400 text-[11px]">Authorize Google Workspace to fetch emails, list Drive assets, and sync favorites.</p>
+                          <button
+                            onClick={handleGoogleSignIn}
+                            className="bg-indigo-600 hover:bg-indigo-500 text-white font-mono text-[10px] px-4 py-2 rounded-lg font-bold transition cursor-pointer"
+                          >
+                            Authenticate Google Channel
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* WIDGET D: CLOUD SQL COMPLIANCE AUDITS & FAVORITES */}
+                    <div className="bg-[#0a0c13] border border-gray-800/50 rounded-xl p-4 flex flex-col gap-4">
+                      <div className="flex items-center justify-between border-b border-gray-850 pb-2">
+                        <h5 className="font-mono font-bold text-white flex items-center gap-1.5 uppercase">
+                          <Database className="w-4 h-4 text-rose-400" />
+                          Cloud SQL Storage State
+                        </h5>
+                        <button 
+                          onClick={() => setActiveTab('workspace')}
+                          className="text-[10px] font-mono text-rose-400 hover:text-rose-300 flex items-center gap-0.5"
+                        >
+                          Storage <ChevronRight className="w-3 h-3" />
+                        </button>
+                      </div>
+
+                      <div className="flex flex-col gap-2.5 text-[11px] font-mono">
+                        {/* Audit count */}
+                        <div className="flex items-center justify-between border-b border-gray-900 pb-1.5">
+                          <span className="text-gray-500">SAVED METADATA FAVORITES:</span>
+                          <span className="text-white font-bold">{favItems.length} records</span>
+                        </div>
+                        {/* Saved count */}
+                        <div className="flex items-center justify-between border-b border-gray-900 pb-1.5">
+                          <span className="text-gray-500">SECURITY AUDIT LOGS COUNT:</span>
+                          <span className="text-white font-bold">{auditLogsList.length} actions logged</span>
+                        </div>
+                        {/* Latest Audit snippet */}
+                        {auditLogsList.length > 0 ? (
+                          <div className="bg-[#05060a] p-2 rounded text-[10px] text-indigo-300 border border-gray-850 font-mono">
+                            <span className="text-gray-500 block text-[8px] uppercase">LATEST PERSISTED TRANSACTION:</span>
+                            <span className="text-white font-semibold">[{auditLogsList[0].action}]</span> {auditLogsList[0].details?.slice(0, 70)}...
+                          </div>
+                        ) : (
+                          <span className="text-gray-500 italic text-[10px] text-center">Awaiting SQL dynamic operations...</span>
+                        )}
+                      </div>
+                    </div>
+
+                  </div>
+
+                </div>
+              )}
+
               {/* TAB 1: WHITE BOX TRACE VIEW */}
               {activeTab === 'traces' && (
                 <div className="flex flex-col gap-5 h-full">
