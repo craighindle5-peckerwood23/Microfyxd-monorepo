@@ -22,8 +22,21 @@ import {
   Compass,
   ArrowRight,
   Sparkles,
-  Info
+  Info,
+  Mail,
+  File,
+  FolderPlus,
+  Send,
+  LogOut,
+  LogIn,
+  ExternalLink,
+  Trash2,
+  Heart,
+  History,
+  Plus
 } from 'lucide-react';
+import { auth, googleSignIn, logout, initAuth } from './lib/firebase.ts';
+import { User } from 'firebase/auth';
 
 interface TraceLog {
   stepId: string;
@@ -43,8 +56,350 @@ interface MonorepoFile {
 
 export default function App() {
   // Navigation & UI state
-  const [activeTab, setActiveTab] = useState<'traces' | 'files' | 'phenotype' | 'ego' | 'infra' | 'sandbox' | 'memory' | 'doctrine'>('traces');
+  const [activeTab, setActiveTab] = useState<'traces' | 'files' | 'phenotype' | 'ego' | 'infra' | 'sandbox' | 'memory' | 'doctrine' | 'workspace'>('traces');
   
+  // Google Workspace & Firebase Auth state
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [googleToken, setGoogleToken] = useState<string | null>(null);
+  const [firebaseToken, setFirebaseToken] = useState<string | null>(null);
+  const [emails, setEmails] = useState<any[]>([]);
+  const [driveFiles, setDriveFiles] = useState<any[]>([]);
+  const [favItems, setFavItems] = useState<any[]>([]);
+  const [auditLogsList, setAuditLogsList] = useState<any[]>([]);
+  const [isLoadingWorkspace, setIsLoadingWorkspace] = useState<boolean>(false);
+  
+  // Workspace inputs
+  const [emailTo, setEmailTo] = useState<string>('');
+  const [emailSubject, setEmailSubject] = useState<string>('');
+  const [emailBody, setEmailBody] = useState<string>('');
+  const [newFolderName, setNewFolderName] = useState<string>('');
+
+  // Firebase auth listener setup
+  useEffect(() => {
+    const unsubscribe = initAuth(
+      async (user, gToken) => {
+        setCurrentUser(user);
+        setGoogleToken(gToken);
+        const fbToken = await user.getIdToken();
+        setFirebaseToken(fbToken);
+        // Automatically sync & load data when logged in
+        syncAndLoadData(fbToken, gToken);
+      },
+      () => {
+        setCurrentUser(null);
+        setGoogleToken(null);
+        setFirebaseToken(null);
+      }
+    );
+    return () => unsubscribe();
+  }, []);
+
+  const syncAndLoadData = async (fbToken: string, gToken: string) => {
+    try {
+      setIsLoadingWorkspace(true);
+      // Sync user
+      await fetch('/api/users/sync', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${fbToken}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      // Fetch user specific data
+      await Promise.all([
+        loadEmails(fbToken, gToken),
+        loadDriveFiles(fbToken, gToken),
+        loadFavorites(fbToken),
+        loadAuditLogs(fbToken)
+      ]);
+    } catch (err) {
+      console.error('Error syncing/loading user data', err);
+    } finally {
+      setIsLoadingWorkspace(false);
+    }
+  };
+
+  const loadEmails = async (fbToken: string, gToken: string) => {
+    try {
+      const res = await fetch('/api/workspace/emails', {
+        headers: {
+          'Authorization': `Bearer ${fbToken}`,
+          'x-google-token': gToken
+        }
+      });
+      const data = await res.json();
+      if (data.success) {
+        setEmails(data.emails || []);
+      }
+    } catch (err) {
+      console.error('Failed to load Gmail messages:', err);
+    }
+  };
+
+  const loadDriveFiles = async (fbToken: string, gToken: string) => {
+    try {
+      const res = await fetch('/api/workspace/files', {
+        headers: {
+          'Authorization': `Bearer ${fbToken}`,
+          'x-google-token': gToken
+        }
+      });
+      const data = await res.json();
+      if (data.success) {
+        setDriveFiles(data.files || []);
+      }
+    } catch (err) {
+      console.error('Failed to load Google Drive files:', err);
+    }
+  };
+
+  const loadFavorites = async (fbToken: string) => {
+    try {
+      const res = await fetch('/api/favorites', {
+        headers: { 'Authorization': `Bearer ${fbToken}` }
+      });
+      const data = await res.json();
+      if (data.success) {
+        setFavItems(data.favorites || []);
+      }
+    } catch (err) {
+      console.error('Failed to load favorites from Cloud SQL:', err);
+    }
+  };
+
+  const loadAuditLogs = async (fbToken: string) => {
+    try {
+      const res = await fetch('/api/audit-logs', {
+        headers: { 'Authorization': `Bearer ${fbToken}` }
+      });
+      const data = await res.json();
+      if (data.success) {
+        setAuditLogsList(data.logs || []);
+      }
+    } catch (err) {
+      console.error('Failed to load audit logs from Cloud SQL:', err);
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    try {
+      setIsLoadingWorkspace(true);
+      const res = await googleSignIn();
+      if (res) {
+        setCurrentUser(res.user);
+        setGoogleToken(res.accessToken);
+        const fbToken = await res.user.getIdToken();
+        setFirebaseToken(fbToken);
+        await syncAndLoadData(fbToken, res.accessToken);
+      }
+    } catch (err: any) {
+      alert(`Google Sign-In failed: ${err.message || err}`);
+    } finally {
+      setIsLoadingWorkspace(false);
+    }
+  };
+
+  const handleGoogleSignOut = async () => {
+    try {
+      await logout();
+      setCurrentUser(null);
+      setGoogleToken(null);
+      setFirebaseToken(null);
+      setEmails([]);
+      setDriveFiles([]);
+      setFavItems([]);
+      setAuditLogsList([]);
+    } catch (err: any) {
+      alert(`Google Logout failed: ${err.message || err}`);
+    }
+  };
+
+  const handleSendEmail = async () => {
+    if (!firebaseToken || !googleToken) return;
+    try {
+      setIsLoadingWorkspace(true);
+      const res = await fetch('/api/workspace/send-email', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${firebaseToken}`,
+          'x-google-token': googleToken,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          to: emailTo,
+          subject: emailSubject,
+          body: emailBody
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert('Email sent successfully via Google Workspace!');
+        setEmailTo('');
+        setEmailSubject('');
+        setEmailBody('');
+        // Reload emails & audit logs
+        loadEmails(firebaseToken, googleToken);
+        loadAuditLogs(firebaseToken);
+      } else {
+        alert(`Failed to send email: ${data.error}`);
+      }
+    } catch (err: any) {
+      alert(`Error sending email: ${err.message}`);
+    } finally {
+      setIsLoadingWorkspace(false);
+    }
+  };
+
+  const handleCreateFolder = async () => {
+    if (!firebaseToken || !googleToken) return;
+    try {
+      setIsLoadingWorkspace(true);
+      const res = await fetch('/api/workspace/create-folder', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${firebaseToken}`,
+          'x-google-token': googleToken,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ folderName: newFolderName })
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert(`Google Drive folder "${newFolderName}" created successfully!`);
+        setNewFolderName('');
+        // Reload drive files & audit logs
+        loadDriveFiles(firebaseToken, googleToken);
+        loadAuditLogs(firebaseToken);
+      } else {
+        alert(`Failed to create folder: ${data.error}`);
+      }
+    } catch (err: any) {
+      alert(`Error creating folder: ${err.message}`);
+    } finally {
+      setIsLoadingWorkspace(false);
+    }
+  };
+
+  const handleAddFav = async (type: 'email' | 'file', externalId: string, title: string, snippet: string) => {
+    if (!firebaseToken) return;
+    try {
+      const res = await fetch('/api/favorites', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${firebaseToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ type, externalId, title, snippet })
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert('Item added to Cloud SQL favorites!');
+        loadFavorites(firebaseToken);
+      } else {
+        alert(`Failed to save favorite: ${data.error}`);
+      }
+    } catch (err: any) {
+      alert(`Error saving favorite: ${err.message}`);
+    }
+  };
+
+  const handleDeleteFav = async (favId: number) => {
+    if (!firebaseToken) return;
+    try {
+      const res = await fetch(`/api/favorites/${favId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${firebaseToken}` }
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert('Favorite removed from database.');
+        loadFavorites(firebaseToken);
+      } else {
+        alert(`Failed to delete favorite: ${data.error}`);
+      }
+    } catch (err: any) {
+      alert(`Error deleting favorite: ${err.message}`);
+    }
+  };
+
+  // Google Picker client-side callback trigger helper
+  const triggerGooglePicker = () => {
+    if (!googleToken) {
+      alert('Please connect Google Workspace account first!');
+      return;
+    }
+
+    // Try real Google Picker API, fallback to smooth high-fidelity custom selection simulation if scripts aren't loaded in iframe!
+    try {
+      // @ts-ignore
+      if (typeof window.google !== 'undefined' && window.google.picker) {
+        const pickerOrigin =
+          window.location.ancestorOrigins &&
+          window.location.ancestorOrigins.length > 0
+            ? window.location.ancestorOrigins[window.location.ancestorOrigins.length - 1]
+            : window.location.origin;
+
+        // @ts-ignore
+        const picker = new window.google.picker.PickerBuilder()
+          // @ts-ignore
+          .addView(window.google.picker.ViewId.DOCS)
+          .setOAuthToken(googleToken)
+          .setCallback(async (data: any) => {
+            // @ts-ignore
+            if (data.action === window.google.picker.Action.PICKED) {
+              const file = data.docs[0];
+              alert(`Selected Google Drive item: ${file.name}`);
+              await handleAddFav('file', file.id, file.name, `Google Picker Selected file. MIME: ${file.mimeType}`);
+              // Log the picker event
+              if (firebaseToken) {
+                await fetch('/api/audit-logs', {
+                  method: 'POST',
+                  headers: {
+                    'Authorization': `Bearer ${firebaseToken}`,
+                    'Content-Type': 'application/json'
+                  },
+                  body: JSON.stringify({ action: 'PICK_FILE_PICKER', details: `Selected ${file.name} (ID: ${file.id})` })
+                });
+                loadAuditLogs(firebaseToken);
+              }
+            }
+          })
+          .setOrigin(pickerOrigin)
+          .build();
+        picker.setVisible(true);
+      } else {
+        // High fidelity visual selection simulation for the sandboxed preview iframe
+        const fileNames = [
+          'Engine_Tuning_Config_2026.xlsx',
+          'Watchdog_Security_Compliance_v2.pdf',
+          'Coolant_Sensors_Telemetry.csv',
+          'Sandbox_Typescript_Heal_Patch.ts',
+          'Cognitive_Ego_Perspectives.json'
+        ];
+        const randomName = fileNames[Math.floor(Math.random() * fileNames.length)];
+        const simId = 'sim-' + Math.random().toString(36).substring(2, 9);
+        
+        const proceed = confirm(`[GOOGLE PICKER INTERACTION (SANDBOXED IFRAME MODE)]\n\nGoogle Picker script is initializing...\n\nWould you like to simulate picking: "${randomName}"?`);
+        if (proceed) {
+          handleAddFav('file', simId, randomName, `Simulated picker file selection.`);
+          // Log audit log
+          if (firebaseToken) {
+            fetch('/api/audit-logs', {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${firebaseToken}`,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({ action: 'PICK_FILE_PICKER', details: `Selected simulated file: ${randomName} (ID: ${simId})` })
+            }).then(() => loadAuditLogs(firebaseToken));
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Picker error:', err);
+    }
+  };
+
   // Interactive Simulator parameters
   const [prompt, setPrompt] = useState<string>('Diagnose coolant temperature warning and propose safety ECUs adjust map.');
   const [hardwareOverride, setHardwareOverride] = useState<string>('dgx-h100');
@@ -509,6 +864,12 @@ Microfyxd is an advanced, high-assurance multi-agent platform orchestrated stric
                 className={`px-4 py-3 flex items-center gap-1.5 border-r border-gray-800 font-semibold cursor-pointer ${activeTab === 'doctrine' ? 'bg-[#0b0c13] text-indigo-400 border-t-2 border-t-indigo-500' : 'text-gray-400 hover:bg-gray-900'}`}
               >
                 <Shield className="w-3.5 h-3.5" /> DOCTRINE
+              </button>
+              <button 
+                onClick={() => setActiveTab('workspace')}
+                className={`px-4 py-3 flex items-center gap-1.5 border-r border-gray-800 font-semibold cursor-pointer ${activeTab === 'workspace' ? 'bg-[#0b0c13] text-indigo-400 border-t-2 border-t-indigo-500 animate-pulse' : 'text-gray-400 hover:bg-gray-900'}`}
+              >
+                <Settings className="w-3.5 h-3.5 text-indigo-400" /> WORKSPACE
               </button>
             </div>
 
@@ -1097,6 +1458,316 @@ Microfyxd is an advanced, high-assurance multi-agent platform orchestrated stric
                     </div>
 
                   </div>
+                </div>
+              )}
+
+              {/* TAB 9: WORKSPACE */}
+              {activeTab === 'workspace' && (
+                <div className="flex flex-col gap-5 text-xs animate-fadeIn">
+                  
+                  {/* HEADER */}
+                  <div className="flex items-center justify-between border-b border-gray-800/40 pb-3">
+                    <div>
+                      <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                        <Settings className="w-4 h-4 text-indigo-400" />
+                        GOOGLE WORKSPACE CONTROL BRIDGE
+                      </h3>
+                      <p className="text-xs text-gray-400 mt-0.5">
+                        High-assurance Firebase Authentication proxy mapped directly to persistent Cloud SQL audit databases
+                      </p>
+                    </div>
+
+                    {currentUser ? (
+                      <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2 bg-[#0d151c] border border-indigo-900/40 px-3 py-1.5 rounded-lg">
+                          {currentUser.photoURL && (
+                            <img 
+                              src={currentUser.photoURL} 
+                              alt="avatar" 
+                              className="w-5 h-5 rounded-full ring-1 ring-indigo-500/30"
+                              referrerPolicy="no-referrer"
+                            />
+                          )}
+                          <div className="text-left">
+                            <span className="text-[10px] text-gray-400 font-mono block">Authorized Operator</span>
+                            <span className="text-[11px] text-white font-mono font-bold leading-none">{currentUser.email}</span>
+                          </div>
+                        </div>
+                        <button
+                          onClick={handleGoogleSignOut}
+                          className="bg-rose-950/30 hover:bg-rose-900/40 text-rose-300 border border-rose-900/30 px-3 py-1.5 rounded-lg font-mono text-[10px] flex items-center gap-1.5 transition cursor-pointer"
+                        >
+                          <LogOut className="w-3.5 h-3.5" />
+                          DISCONNECT
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={handleGoogleSignIn}
+                        disabled={isLoadingWorkspace}
+                        className="bg-gradient-to-tr from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-mono text-[10px] font-bold px-4 py-2 rounded-lg flex items-center gap-2 shadow-lg shadow-indigo-500/10 cursor-pointer"
+                      >
+                        <LogIn className="w-4 h-4" />
+                        {isLoadingWorkspace ? 'CONNECTING...' : 'AUTHORIZE GOOGLE WORKSPACE'}
+                      </button>
+                    )}
+                  </div>
+
+                  {!currentUser ? (
+                    <div className="border border-dashed border-gray-800 rounded-xl flex flex-col items-center justify-center p-12 text-center bg-[#07080f]/30">
+                      <div className="bg-indigo-500/10 p-4 rounded-full border border-indigo-500/20 mb-4 animate-pulse">
+                        <Settings className="w-8 h-8 text-indigo-400" />
+                      </div>
+                      <h4 className="text-sm font-mono font-bold text-white mb-2">Workspace Integration Required</h4>
+                      <p className="text-xs text-gray-400 max-w-lg leading-relaxed">
+                        Authorize Microfyxd to access your Google Workspace (Gmail readonly, send, and Google Drive metadata scopes). 
+                        Once authorized, you can load real-time emails, search files via Google Picker, send notifications, and save assets directly to your high-assurance Cloud SQL cluster.
+                      </p>
+                      <button
+                        onClick={handleGoogleSignIn}
+                        disabled={isLoadingWorkspace}
+                        className="mt-6 bg-indigo-600 hover:bg-indigo-500 text-white font-mono text-xs font-bold px-6 py-2.5 rounded-lg flex items-center gap-2 shadow-lg cursor-pointer"
+                      >
+                        <LogIn className="w-4 h-4" />
+                        {isLoadingWorkspace ? 'Authorizing secure channel...' : 'Authenticate securely with Google'}
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+                      {/* GMAIL PANEL (lg:span-6) */}
+                      <div className="lg:col-span-6 flex flex-col gap-4">
+                        <div className="bg-[#0a0c13] border border-gray-800/40 rounded-xl p-4 flex flex-col gap-3 shadow-sm">
+                          <div className="flex items-center justify-between border-b border-gray-850 pb-2">
+                            <span className="text-xs font-mono font-bold text-white flex items-center gap-1.5 uppercase">
+                              <Mail className="w-4 h-4 text-indigo-400" />
+                              Gmail Active Inbox
+                            </span>
+                            <button
+                              onClick={() => loadEmails(firebaseToken!, googleToken!)}
+                              className="text-[10px] font-mono text-indigo-400 hover:text-indigo-300 flex items-center gap-1 cursor-pointer"
+                            >
+                              <RefreshCw className="w-3 h-3 animate-spin" /> Reload
+                            </button>
+                          </div>
+
+                          {emails.length === 0 ? (
+                            <p className="text-gray-500 text-center py-4 font-mono text-[11px]">No emails found or inbox is empty.</p>
+                          ) : (
+                            <div className="flex flex-col gap-2 max-h-[220px] overflow-y-auto pr-1">
+                              {emails.map((email: any) => (
+                                <div key={email.id} className="bg-[#05060a] border border-gray-850 rounded p-2.5 flex flex-col gap-1 hover:border-gray-700 transition">
+                                  <div className="flex justify-between items-start gap-2">
+                                    <span className="text-[10px] text-indigo-300 font-mono truncate max-w-[140px]">{email.from}</span>
+                                    <span className="text-[9px] text-gray-500 font-mono whitespace-nowrap">{email.date?.slice(0, 16)}</span>
+                                  </div>
+                                  <span className="text-white font-semibold truncate leading-tight text-[11px]">{email.subject}</span>
+                                  <span className="text-gray-400 text-[10px] line-clamp-1">{email.snippet}</span>
+                                  <div className="flex justify-end gap-2 mt-1.5 pt-1 border-t border-gray-900/60">
+                                    <button
+                                      onClick={() => handleAddFav('email', email.id, email.subject, email.snippet)}
+                                      className="text-[9px] font-mono text-indigo-400 hover:text-indigo-300 flex items-center gap-1 cursor-pointer"
+                                    >
+                                      <Heart className="w-3 h-3 text-indigo-400 fill-indigo-400/10" /> Save Favorite
+                                    </button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* SEND EMAIL OUTBOX */}
+                        <div className="bg-[#0a0c13] border border-gray-800/40 rounded-xl p-4 flex flex-col gap-3 shadow-sm">
+                          <span className="text-xs font-mono font-bold text-white flex items-center gap-1.5 uppercase border-b border-gray-850 pb-2">
+                            <Send className="w-4 h-4 text-purple-400" />
+                            Send Notification Outbox
+                          </span>
+                          <div className="flex flex-col gap-2">
+                            <input
+                              type="email"
+                              placeholder="To (recipient email address)..."
+                              value={emailTo}
+                              onChange={(e) => setEmailTo(e.target.value)}
+                              className="bg-[#05060a] border border-gray-850 rounded px-2.5 py-1.5 font-mono text-[11px] text-white outline-none focus:border-indigo-500"
+                            />
+                            <input
+                              type="text"
+                              placeholder="Subject line..."
+                              value={emailSubject}
+                              onChange={(e) => setEmailSubject(e.target.value)}
+                              className="bg-[#05060a] border border-gray-850 rounded px-2.5 py-1.5 font-mono text-[11px] text-white outline-none focus:border-indigo-500"
+                            />
+                            <textarea
+                              rows={3}
+                              placeholder="Message body content..."
+                              value={emailBody}
+                              onChange={(e) => setEmailBody(e.target.value)}
+                              className="bg-[#05060a] border border-gray-850 rounded px-2.5 py-1.5 font-mono text-[11px] text-white outline-none focus:border-indigo-500 resize-none"
+                            />
+                            <button
+                              onClick={handleSendEmail}
+                              disabled={!emailTo || !emailSubject || !emailBody}
+                              className="bg-purple-600/20 hover:bg-purple-600/30 text-purple-200 border border-purple-500/30 text-[10px] font-mono py-1.5 rounded transition uppercase font-bold cursor-pointer"
+                            >
+                              Dispatch Email Message
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* DRIVE & PICKER PANEL (lg:span-6) */}
+                      <div className="lg:col-span-6 flex flex-col gap-4">
+                        <div className="bg-[#0a0c13] border border-gray-800/40 rounded-xl p-4 flex flex-col gap-3 shadow-sm">
+                          <div className="flex items-center justify-between border-b border-gray-850 pb-2">
+                            <span className="text-xs font-mono font-bold text-white flex items-center gap-1.5 uppercase">
+                              <File className="w-4 h-4 text-emerald-400" />
+                              Google Drive Files
+                            </span>
+                            <div className="flex gap-2">
+                              <button
+                                onClick={triggerGooglePicker}
+                                className="text-[10px] font-mono text-emerald-400 hover:text-emerald-300 flex items-center gap-1 cursor-pointer bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20"
+                              >
+                                <Plus className="w-3 h-3" /> Google Picker
+                              </button>
+                              <button
+                                onClick={() => loadDriveFiles(firebaseToken!, googleToken!)}
+                                className="text-[10px] font-mono text-gray-400 hover:text-white flex items-center gap-1 cursor-pointer"
+                              >
+                                <RefreshCw className="w-3 h-3" /> Reload
+                              </button>
+                            </div>
+                          </div>
+
+                          {driveFiles.length === 0 ? (
+                            <p className="text-gray-500 text-center py-4 font-mono text-[11px]">No files found or empty Drive root.</p>
+                          ) : (
+                            <div className="flex flex-col gap-2 max-h-[220px] overflow-y-auto pr-1">
+                              {driveFiles.map((file: any) => (
+                                <div key={file.id} className="bg-[#05060a] border border-gray-850 rounded p-2 flex items-center justify-between gap-3 hover:border-gray-700 transition">
+                                  <div className="flex items-center gap-2 overflow-hidden">
+                                    {file.iconLink && (
+                                      <img src={file.iconLink} alt="mime" className="w-4 h-4 opacity-75" referrerPolicy="no-referrer" />
+                                    )}
+                                    <div className="flex flex-col overflow-hidden text-left">
+                                      <span className="text-white font-mono text-[11px] truncate leading-snug">{file.name}</span>
+                                      <span className="text-gray-500 text-[9px] font-mono truncate">{file.mimeType}</span>
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    {file.webViewLink && (
+                                      <a
+                                        href={file.webViewLink}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="p-1 hover:bg-gray-800 text-gray-400 hover:text-white rounded transition"
+                                        title="View document on web"
+                                      >
+                                        <ExternalLink className="w-3.5 h-3.5" />
+                                      </a>
+                                    )}
+                                    <button
+                                      onClick={() => handleAddFav('file', file.id, file.name, `Google Drive file. MIME: ${file.mimeType}`)}
+                                      className="p-1 hover:bg-indigo-500/10 text-indigo-400 hover:text-indigo-300 rounded transition"
+                                      title="Save Favorite to SQL"
+                                    >
+                                      <Heart className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* CREATE FOLDER */}
+                        <div className="bg-[#0a0c13] border border-gray-800/40 rounded-xl p-4 flex flex-col gap-3 shadow-sm">
+                          <span className="text-xs font-mono font-bold text-white flex items-center gap-1.5 uppercase border-b border-gray-850 pb-2">
+                            <FolderPlus className="w-4 h-4 text-emerald-400" />
+                            Create Workspace Directory
+                          </span>
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              placeholder="New folder name..."
+                              value={newFolderName}
+                              onChange={(e) => setNewFolderName(e.target.value)}
+                              className="flex-1 bg-[#05060a] border border-gray-850 rounded px-2.5 py-1.5 font-mono text-[11px] text-white outline-none focus:border-indigo-500"
+                            />
+                            <button
+                              onClick={handleCreateFolder}
+                              disabled={!newFolderName.trim()}
+                              className="bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-200 border border-emerald-500/30 text-[10px] font-mono px-4 py-1.5 rounded transition uppercase font-bold cursor-pointer"
+                            >
+                              Create Folder
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+
+                    </div>
+                  )}
+
+                  {currentUser && (
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 mt-2">
+                      
+                      {/* CLOUD SQL SAVED FAVORITES (lg:span-6) */}
+                      <div className="lg:col-span-6 bg-[#0a0c13] border border-gray-800/40 rounded-xl p-4 flex flex-col gap-3 shadow-sm">
+                        <span className="text-xs font-mono font-bold text-white flex items-center gap-1.5 uppercase border-b border-gray-850 pb-2">
+                          <Heart className="w-4 h-4 text-rose-400 fill-rose-500/10" />
+                          Cloud SQL Saved Favorites
+                        </span>
+                        {favItems.length === 0 ? (
+                          <p className="text-gray-500 text-center py-4 font-mono text-[11px]">No favorites saved yet. Add some items from above!</p>
+                        ) : (
+                          <div className="flex flex-col gap-2 max-h-[220px] overflow-y-auto pr-1">
+                            {favItems.map((fav: any) => (
+                              <div key={fav.id} className="bg-[#05060a] border border-gray-850 rounded p-2.5 flex items-center justify-between gap-3 hover:border-rose-500/20 transition">
+                                <div className="flex flex-col text-left overflow-hidden">
+                                  <span className="text-[9px] font-mono text-rose-400 uppercase tracking-widest leading-none mb-0.5">{fav.type}</span>
+                                  <span className="text-white font-semibold text-[11px] truncate leading-tight">{fav.title}</span>
+                                  <span className="text-gray-400 text-[10px] truncate leading-snug">{fav.snippet}</span>
+                                </div>
+                                <button
+                                  onClick={() => handleDeleteFav(fav.id)}
+                                  className="p-1.5 hover:bg-rose-500/10 text-rose-400 rounded hover:text-rose-300 transition"
+                                  title="Remove favorite from database"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* CLOUD SQL AUDIT LOGS FEED (lg:span-6) */}
+                      <div className="lg:col-span-6 bg-[#0a0c13] border border-gray-800/40 rounded-xl p-4 flex flex-col gap-3 shadow-sm">
+                        <span className="text-xs font-mono font-bold text-white flex items-center gap-1.5 uppercase border-b border-gray-850 pb-2">
+                          <History className="w-4 h-4 text-indigo-400" />
+                          Cloud SQL Real-Time Audit Trails
+                        </span>
+                        {auditLogsList.length === 0 ? (
+                          <p className="text-gray-500 text-center py-4 font-mono text-[11px]">Awaiting workspace transactions...</p>
+                        ) : (
+                          <div className="flex flex-col gap-2 max-h-[220px] overflow-y-auto font-mono text-[10px] pr-1">
+                            {auditLogsList.map((log: any) => (
+                              <div key={log.id} className="p-2 bg-[#05060a] border border-gray-900 rounded flex flex-col gap-0.5 text-left">
+                                <div className="flex justify-between">
+                                  <span className="text-indigo-400 font-bold uppercase">[{log.action}]</span>
+                                  <span className="text-gray-600">{new Date(log.createdAt).toLocaleTimeString()}</span>
+                                </div>
+                                <span className="text-gray-400 text-[10px] leading-relaxed">{log.details}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                    </div>
+                  )}
+
                 </div>
               )}
 
