@@ -9,7 +9,7 @@ import { GoogleGenAI } from '@google/genai';
 import { requireAuth, AuthRequest } from './src/middleware/auth.ts';
 import { getOrCreateUser } from './src/db/users.ts';
 import { db } from './src/db/index.ts';
-import { favorites, auditLogs, users } from './src/db/schema.ts';
+import { favorites, auditLogs, users, goals, tasks, synapses } from './src/db/schema.ts';
 import { eq, and, desc } from 'drizzle-orm';
 
 // Relative imports from our monorepo packages in the workspace
@@ -694,6 +694,207 @@ Generate a markdown response:
       logs,
       url: 'https://microfyxd-site-staged.vercel.app'
     });
+  });
+
+  // API Route: Get all cognitive goals
+  app.get('/api/cognition/goals', async (req, res) => {
+    try {
+      const allGoals = await db.select().from(goals).orderBy(desc(goals.priority));
+      res.json({ success: true, goals: allGoals });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // API Route: Add a new cognitive goal
+  app.post('/api/cognition/goals', async (req, res) => {
+    const { description, priority, constraints } = req.body;
+    try {
+      const newGoal = await db.insert(goals).values({
+        description: description || 'Optimize environment compliance runtime',
+        priority: priority ? parseInt(priority) : 5,
+        constraints: constraints || 'No violations',
+        status: 'active'
+      }).returning();
+      res.json({ success: true, goal: newGoal[0] });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // API Route: Complete or fail a goal
+  app.post('/api/cognition/goals/:id/status', async (req, res) => {
+    const { id } = req.params;
+    const { status } = req.body; // 'completed' | 'failed' | 'active'
+    try {
+      const updated = await db.update(goals)
+        .set({ status, updatedAt: new Date() })
+        .where(eq(goals.id, parseInt(id)))
+        .returning();
+      res.json({ success: true, goal: updated[0] });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // API Route: Get cognitive task queue
+  app.get('/api/cognition/tasks', async (req, res) => {
+    try {
+      const queue = await db.select().from(tasks).orderBy(desc(tasks.priority));
+      res.json({ success: true, tasks: queue });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // API Route: Add a task to queue
+  app.post('/api/cognition/tasks', async (req, res) => {
+    const { source, priority, assignedGoal } = req.body;
+    try {
+      const newTask = await db.insert(tasks).values({
+        source: source || 'human',
+        priority: priority ? parseInt(priority) : 5,
+        assignedGoal: assignedGoal || 'Routine maintenance cycle',
+        status: 'queued'
+      }).returning();
+      res.json({ success: true, task: newTask[0] });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // API Route: Get all neural routing synapses
+  app.get('/api/cognition/synapses', async (req, res) => {
+    try {
+      let connections = await db.select().from(synapses);
+      
+      // Seed default synapses if empty
+      if (connections.length === 0) {
+        const defaultPairs = [
+          { fromNode: 'Perception', toNode: 'Planning', weight: 1.0 },
+          { fromNode: 'Planning', toNode: 'Action', weight: 1.0 },
+          { fromNode: 'Action', toNode: 'Feedback', weight: 1.0 },
+          { fromNode: 'Feedback', toNode: 'Learning', weight: 1.0 },
+          { fromNode: 'Learning', toNode: 'Controller', weight: 1.0 },
+          { fromNode: 'Controller', toNode: 'Perception', weight: 1.0 },
+          { fromNode: 'Planning', toNode: 'Sandbox', weight: 0.8 },
+          { fromNode: 'Sandbox', toNode: 'Feedback', weight: 0.9 },
+          { fromNode: 'Planning', toNode: 'Database', weight: 0.75 },
+          { fromNode: 'Database', toNode: 'Feedback', weight: 0.85 },
+        ];
+
+        for (const pair of defaultPairs) {
+          await db.insert(synapses).values({
+            fromNode: pair.fromNode,
+            toNode: pair.toNode,
+            weight: pair.weight,
+          });
+        }
+        connections = await db.select().from(synapses);
+      }
+      
+      res.json({ success: true, synapses: connections });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // API Route: Execute Cognition Loop Step with STDP neuromorphic adaptation
+  app.post('/api/cognition/loop/execute', async (req, res) => {
+    const { simulatedOutcome } = req.body; // 'success' | 'failure' | 'violation'
+    const outcome = simulatedOutcome || 'success';
+
+    try {
+      // 1. Fetch current active goals
+      const activeGoals = await db.select().from(goals).where(eq(goals.status, 'active')).limit(1);
+      const currentGoal = activeGoals.length > 0 ? activeGoals[0] : null;
+
+      // 2. Fetch the highest priority queued task
+      const queuedTasks = await db.select().from(tasks).where(eq(tasks.status, 'queued')).orderBy(desc(tasks.priority)).limit(1);
+      const currentTask = queuedTasks.length > 0 ? queuedTasks[0] : null;
+
+      // Mark the task as processed if found
+      if (currentTask) {
+        await db.update(tasks).set({ status: 'processed' }).where(eq(tasks.id, currentTask.id));
+      }
+
+      // If no goal is active and we have a task, auto-learn goal from task
+      let targetGoalDesc = currentGoal ? currentGoal.description : 'Optimize overall system cognition state';
+      if (!currentGoal && currentTask) {
+        targetGoalDesc = `Resolve task: ${currentTask.assignedGoal}`;
+        const newG = await db.insert(goals).values({
+          description: targetGoalDesc,
+          priority: currentTask.priority,
+          constraints: 'Maintain strict doctrine compliance',
+          status: 'active'
+        }).returning();
+        // Set goal for current loop
+      }
+
+      // 3. Fetch current synapse weights to simulate routing map traversal
+      let currentSynapses = await db.select().from(synapses);
+      if (currentSynapses.length === 0) {
+        // Trigger self-seed
+        await fetch(`http://localhost:3000/api/cognition/synapses`);
+        currentSynapses = await db.select().from(synapses);
+      }
+
+      // 4. Run Plasticity Synapse weight STDP adjustments
+      // successful sequence -> strengthen; failed/violation -> weaken
+      const lr = 0.15; // Learning Rate
+      const updatedSynapses = [];
+      for (const syn of currentSynapses) {
+        let newWeight = syn.weight;
+        if (outcome === 'success') {
+          // STDP LTP (Long Term Potentiation) - asymptotic boost
+          newWeight = syn.weight + lr * (1.2 - syn.weight);
+        } else if (outcome === 'violation') {
+          // Severe penalty for doctrine constraint violations
+          newWeight = syn.weight * 0.4;
+        } else {
+          // LTD (Long Term Depression) for failure
+          newWeight = syn.weight - lr * syn.weight;
+        }
+        // Clamping weight between 0.1 and 2.0
+        newWeight = Math.max(0.1, Math.min(2.0, parseFloat(newWeight.toFixed(3))));
+
+        const updated = await db.update(synapses)
+          .set({ 
+            weight: newWeight,
+            lastPreTime: new Date(),
+            lastPostTime: outcome === 'success' ? new Date(Date.now() + 5) : new Date(Date.now() - 5)
+          })
+          .where(eq(synapses.id, syn.id))
+          .returning();
+        
+        updatedSynapses.push(updated[0]);
+      }
+
+      // 5. Ephemeral snapshot of perception telemetry state
+      const stateSnapshot = {
+        cpuUsage: `${Math.floor(Math.random() * 25) + 5}%`,
+        gpuClusterTemp: `${Math.floor(Math.random() * 15) + 62}°C`,
+        vramUtilization: `${Math.floor(Math.random() * 20) + 40}%`,
+        activeCognitiveGoal: targetGoalDesc,
+        plasticityLearningRate: lr,
+        actionTrace: outcome === 'success' 
+          ? ['Read active goals', 'Retrieved state vector', 'Traversed nodes Planning -> Sandbox -> Action successfully', 'STDP Potentiation executed']
+          : ['Read active goals', 'Anomalous telemetry detected', 'Doctrine violation check failed', 'STDP Depression penalty enforced'],
+        outcome
+      };
+
+      res.json({
+        success: true,
+        outcome,
+        activeGoal: targetGoalDesc,
+        processedTask: currentTask ? currentTask.assignedGoal : null,
+        snapshot: stateSnapshot,
+        synapses: updatedSynapses
+      });
+
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
   });
 
   // Vite development middleware vs Static serving

@@ -25,7 +25,12 @@ async function testConnection() {
     await getDocFromServer(doc(db, 'test', 'connection'));
   } catch (error) {
     if (error instanceof Error && error.message.includes('the client is offline')) {
-      console.error("Please check your Firebase configuration.");
+      const isHeadlessOrOffline = typeof navigator !== 'undefined' && (navigator.webdriver || !navigator.onLine);
+      if (isHeadlessOrOffline) {
+        console.warn("Please check your Firebase configuration. (Offline/Headless mode)");
+      } else {
+        console.error("Please check your Firebase configuration.");
+      }
     }
   }
 }

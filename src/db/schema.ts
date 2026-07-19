@@ -68,3 +68,36 @@ export const agentMemory = pgTable('agent_memory', {
   createdAt: timestamp('created_at').defaultNow(),
 });
 
+// Define the 'goals' table.
+export const goals = pgTable('goals', {
+  id: serial('id').primaryKey(),
+  description: text('description').notNull(),
+  priority: integer('priority').notNull().default(5),
+  constraints: text('constraints'),
+  status: text('status').notNull().default('active'), // 'active' | 'completed' | 'failed'
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+// Define the 'tasks' table.
+export const tasks = pgTable('tasks', {
+  id: serial('id').primaryKey(),
+  source: text('source').notNull(), // 'telemetry' | 'doctrine' | 'human'
+  priority: integer('priority').notNull().default(5),
+  assignedGoal: text('assigned_goal'),
+  status: text('status').notNull().default('queued'), // 'queued' | 'processed' | 'ignored'
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// Define the 'synapses' table.
+export const synapses = pgTable('synapses', {
+  id: serial('id').primaryKey(),
+  fromNode: text('from_node').notNull(),
+  toNode: text('to_node').notNull(),
+  weight: real('weight').notNull().default(1.0),
+  lastPreTime: timestamp('last_pre_time').defaultNow(),
+  lastPostTime: timestamp('last_post_time').defaultNow(),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+
