@@ -37,7 +37,10 @@ import {
   Globe,
   CloudLightning,
   Link2,
-  Search
+  Search,
+  MessageSquare,
+  Volume2,
+  VolumeX
 } from 'lucide-react';
 import { 
   auth, 
@@ -72,6 +75,9 @@ interface MonorepoFile {
 export default function App() {
   // Navigation & UI state
   const [activeTab, setActiveTab] = useState<'cockpit' | 'traces' | 'files' | 'phenotype' | 'ego' | 'infra' | 'sandbox' | 'memory' | 'doctrine' | 'workspace' | 'integrations'>('cockpit');
+  const [terminalMode, setTerminalMode] = useState<'langgraph' | 'ai-director'>('ai-director');
+  const [autoSpeak, setAutoSpeak] = useState<boolean>(true);
+  const [speakingMessageIdx, setSpeakingMessageIdx] = useState<number | null>(null);
   
   // Google Workspace & Firebase Auth state
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -101,6 +107,7 @@ export default function App() {
   const [cognitiveGoals, setCognitiveGoals] = useState<any[]>([]);
   const [cognitiveTasks, setCognitiveTasks] = useState<any[]>([]);
   const [synapseConnections, setSynapseConnections] = useState<any[]>([]);
+  const [agentMemories, setAgentMemories] = useState<any[]>([]);
   const [activeCognitiveLoopStep, setActiveCognitiveLoopStep] = useState<any | null>(null);
   const [isExecutingLoop, setIsExecutingLoop] = useState<boolean>(false);
   const [isLoadingCognition, setIsLoadingCognition] = useState<boolean>(false);
@@ -113,26 +120,91 @@ export default function App() {
   const [newTaskPriority, setNewTaskPriority] = useState<number>(5);
   const [newTaskAssignedGoal, setNewTaskAssignedGoal] = useState<string>('');
 
+  // New Memory Inputs
+  const [newMemoryTenantId, setNewMemoryTenantId] = useState<string>('system-wide');
+  const [newMemoryType, setNewMemoryType] = useState<string>('episodic');
+  const [newMemoryKey, setNewMemoryKey] = useState<string>('');
+  const [newMemoryValue, setNewMemoryValue] = useState<string>('');
+  const [newMemoryConfidence, setNewMemoryConfidence] = useState<number>(1.0);
+
   const loadCognitionData = async () => {
     try {
       setIsLoadingCognition(true);
-      const [goalsRes, tasksRes, synapsesRes] = await Promise.all([
+      const [goalsRes, tasksRes, synapsesRes, memoriesRes] = await Promise.all([
         fetch('/api/cognition/goals'),
         fetch('/api/cognition/tasks'),
-        fetch('/api/cognition/synapses')
+        fetch('/api/cognition/synapses'),
+        fetch('/api/cognition/memories')
       ]);
-      const [goalsData, tasksData, synapsesData] = await Promise.all([
+      const [goalsData, tasksData, synapsesData, memoriesData] = await Promise.all([
         goalsRes.json(),
         tasksRes.json(),
-        synapsesRes.json()
+        synapsesRes.json(),
+        memoriesRes.json()
       ]);
       if (goalsData.success) setCognitiveGoals(goalsData.goals);
       if (tasksData.success) setCognitiveTasks(tasksData.tasks);
       if (synapsesData.success) setSynapseConnections(synapsesData.synapses);
+      if (memoriesData.success) setAgentMemories(memoriesData.memories);
     } catch (err) {
       console.error('Failed to load cognition elements:', err);
     } finally {
       setIsLoadingCognition(false);
+    }
+  };
+
+  const handleAddMemory = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newMemoryKey.trim() || !newMemoryValue.trim()) return;
+    try {
+      const res = await fetch('/api/cognition/memories', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tenantId: newMemoryTenantId,
+          memoryType: newMemoryType,
+          key: newMemoryKey,
+          value: newMemoryValue,
+          confidence: newMemoryConfidence
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setNewMemoryKey('');
+        setNewMemoryValue('');
+        setNewMemoryConfidence(1.0);
+        await loadCognitionData();
+      }
+    } catch (err) {
+      console.error('Failed to save agent memory:', err);
+    }
+  };
+
+  const handleAccessMemory = async (id: number) => {
+    try {
+      const res = await fetch(`/api/cognition/memories/${id}/access`, {
+        method: 'POST'
+      });
+      const data = await res.json();
+      if (data.success) {
+        await loadCognitionData();
+      }
+    } catch (err) {
+      console.error('Failed to access memory:', err);
+    }
+  };
+
+  const handleDeleteMemory = async (id: number) => {
+    try {
+      const res = await fetch(`/api/cognition/memories/${id}`, {
+        method: 'DELETE'
+      });
+      const data = await res.json();
+      if (data.success) {
+        await loadCognitionData();
+      }
+    } catch (err) {
+      console.error('Failed to delete memory:', err);
     }
   };
 
@@ -1096,6 +1168,192 @@ Microfyxd is an advanced, high-assurance multi-agent platform orchestrated stric
     }
   };
 
+  const speakText = (text: string, index: number) => {
+    if (typeof window === 'undefined' || !window.speechSynthesis) return;
+
+    window.speechSynthesis.cancel();
+
+    if (speakingMessageIdx === index) {
+      setSpeakingMessageIdx(null);
+      return;
+    }
+
+    const cleanText = text
+      .replace(/\*\*/g, '')
+      .replace(/###/g, '')
+      .replace(/- /g, '')
+      .replace(/`/g, '')
+      .trim();
+
+    const utterance = new SpeechSynthesisUtterance(cleanText);
+    const voices = window.speechSynthesis.getVoices();
+    const preferredVoice = voices.find(v => v.lang.startsWith('en') && (v.name.includes('Google') || v.name.includes('Natural') || v.name.includes('Microsoft')));
+    if (preferredVoice) {
+      utterance.voice = preferredVoice;
+    }
+
+    utterance.onend = () => {
+      setSpeakingMessageIdx(null);
+    };
+
+    utterance.onerror = () => {
+      setSpeakingMessageIdx(null);
+    };
+
+    setSpeakingMessageIdx(index);
+    window.speechSynthesis.speak(utterance);
+  };
+
+  const stopSpeaking = () => {
+    if (typeof window !== 'undefined' && window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
+    setSpeakingMessageIdx(null);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (typeof window !== 'undefined' && window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+      }
+    };
+  }, []);
+
+  const runAiDirectorFlow = async (customPrompt?: string) => {
+    if (isRunning) return;
+    const activePrompt = customPrompt || prompt;
+    if (!activePrompt.trim()) return;
+
+    setIsRunning(true);
+
+    // Append user message
+    setMessages(prev => [...prev, {
+      role: 'user',
+      content: activePrompt,
+      timestamp: new Date().toLocaleTimeString()
+    }]);
+
+    setPrompt(''); // Clear the input
+
+    try {
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: activePrompt,
+          history: messages.filter(m => m.role === 'user' || m.role === 'assistant').slice(-10) // last 10 messages for context
+        })
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        // Append assistant response
+        setMessages(prev => {
+          const updated = [...prev, {
+            role: 'assistant',
+            content: data.reply,
+            timestamp: new Date().toLocaleTimeString()
+          }];
+          if (autoSpeak) {
+            setTimeout(() => {
+              speakText(data.reply, updated.length - 1);
+            }, 100);
+          }
+          return updated;
+        });
+
+        // Process any actions sent by the AI
+        if (data.actions && Array.isArray(data.actions)) {
+          for (const action of data.actions) {
+            console.log('AI Director executing action:', action);
+            try {
+              switch (action.type) {
+                case 'SET_ACTIVE_TAB':
+                  if (action.payload && action.payload.tab) {
+                    setActiveTab(action.payload.tab);
+                  }
+                  break;
+                case 'SET_ACTIVE_SUBSECTION':
+                  if (action.payload && action.payload.subSection) {
+                    setActiveSubSection(action.payload.subSection);
+                  }
+                  break;
+                case 'EXECUTE_COGNITION_LOOP':
+                  if (action.payload && action.payload.outcome) {
+                    await handleExecuteCognitionStep(action.payload.outcome);
+                  }
+                  break;
+                case 'ADD_COGNITIVE_GOAL':
+                  if (action.payload && action.payload.description) {
+                    const res = await fetch('/api/cognition/goals', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify(action.payload)
+                    });
+                    const resData = await res.json();
+                    if (resData.success) {
+                      await loadCognitionData();
+                    }
+                  }
+                  break;
+                case 'ADD_COGNITIVE_TASK':
+                  if (action.payload && action.payload.assignedGoal) {
+                    const res = await fetch('/api/cognition/tasks', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify(action.payload)
+                    });
+                    const resData = await res.json();
+                    if (resData.success) {
+                      await loadCognitionData();
+                    }
+                  }
+                  break;
+                case 'ADD_MEMORY':
+                  if (action.payload && action.payload.key && action.payload.value) {
+                    const res = await fetch('/api/cognition/memories', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify(action.payload)
+                    });
+                    const resData = await res.json();
+                    if (resData.success) {
+                      await loadCognitionData();
+                    }
+                  }
+                  break;
+                case 'TOGGLE_SAFETY_OVERRIDE':
+                  if (action.payload && action.payload.engaged !== undefined) {
+                    setMetrics(prev => ({
+                      ...prev,
+                      safetyOverride: action.payload.engaged
+                    }));
+                  }
+                  break;
+                default:
+                  console.warn('Unknown action type:', action.type);
+              }
+            } catch (actionErr) {
+              console.error('Error executing action:', action.type, actionErr);
+            }
+          }
+        }
+      } else {
+        throw new Error(data.error || 'Failed to communicate with AI Director.');
+      }
+    } catch (err: any) {
+      console.error(err);
+      setMessages(prev => [...prev, {
+        role: 'system',
+        content: `⛔ **AI Director Error**: ${err.message || err}`,
+        timestamp: new Date().toLocaleTimeString()
+      }]);
+    } finally {
+      setIsRunning(false);
+    }
+  };
+
   const selectedFile = monorepoFiles.find(f => f.path === selectedFilePath);
 
   return (
@@ -1158,15 +1416,49 @@ Microfyxd is an advanced, high-assurance multi-agent platform orchestrated stric
           <div className="flex-1 bg-[#0b0c13]/75 border border-gray-800/60 rounded-xl flex flex-col overflow-hidden shadow-2xl backdrop-blur-sm">
             
             {/* TERMINAL HEADER */}
-            <div className="bg-[#0e101b] px-4 py-3 border-b border-gray-800/80 flex items-center justify-between">
+            <div className="bg-[#0e101b] px-4 py-2 border-b border-gray-800/80 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Terminal className="w-4 h-4 text-indigo-400" />
                 <span className="text-xs font-mono font-medium text-gray-300">CORE EXECUTIVE INTERACTION</span>
               </div>
-              <div className="flex gap-1.5">
-                <div className="w-2.5 h-2.5 rounded-full bg-rose-500/40" />
-                <div className="w-2.5 h-2.5 rounded-full bg-amber-500/40" />
-                <div className="w-2.5 h-2.5 rounded-full bg-emerald-500/40" />
+              <div className="flex items-center gap-3">
+                <div className="flex gap-1 p-0.5 bg-gray-950/80 rounded-lg border border-gray-800/60">
+                  <button
+                    onClick={() => setTerminalMode('ai-director')}
+                    className={`px-2 py-1 text-[9px] font-mono rounded-md font-bold transition ${terminalMode === 'ai-director' ? 'bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 shadow' : 'text-gray-500 hover:text-gray-300'}`}
+                  >
+                    AI DIRECTOR
+                  </button>
+                  <button
+                    onClick={() => setTerminalMode('langgraph')}
+                    className={`px-2 py-1 text-[9px] font-mono rounded-md font-bold transition ${terminalMode === 'langgraph' ? 'bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 shadow' : 'text-gray-500 hover:text-gray-300'}`}
+                  >
+                    LANGGRAPH
+                  </button>
+                </div>
+                <button
+                  onClick={() => {
+                    const newAuto = !autoSpeak;
+                    setAutoSpeak(newAuto);
+                    if (!newAuto) {
+                      stopSpeaking();
+                    }
+                  }}
+                  className={`px-2 py-1 text-[9px] font-mono rounded-md font-bold transition flex items-center gap-1.5 border ${
+                    autoSpeak 
+                      ? 'bg-emerald-600/15 text-emerald-400 border-emerald-500/30 hover:bg-emerald-600/25' 
+                      : 'bg-gray-950/80 text-gray-500 border-gray-800/60 hover:text-gray-300'
+                  }`}
+                  title={autoSpeak ? "Auto-speak enabled" : "Auto-speak disabled"}
+                >
+                  {autoSpeak ? <Volume2 className="w-3 h-3 text-emerald-400 animate-pulse" /> : <VolumeX className="w-3 h-3 text-gray-500" />}
+                  <span>TTS: {autoSpeak ? 'AUTO ON' : 'AUTO OFF'}</span>
+                </button>
+                <div className="flex gap-1.5">
+                  <div className="w-2 h-2 rounded-full bg-rose-500/40" />
+                  <div className="w-2 h-2 rounded-full bg-amber-500/40" />
+                  <div className="w-2 h-2 rounded-full bg-emerald-500/40" />
+                </div>
               </div>
             </div>
 
@@ -1211,6 +1503,30 @@ Microfyxd is an advanced, high-assurance multi-agent platform orchestrated stric
                       })}
                     </div>
                   </div>
+                  {m.role === 'assistant' && (
+                    <div className="flex items-center gap-2 mt-1 px-1">
+                      <button
+                        onClick={() => speakText(m.content, idx)}
+                        className={`p-1 rounded hover:bg-gray-800/50 transition text-[10px] flex items-center gap-1.5 ${
+                          speakingMessageIdx === idx 
+                            ? 'text-emerald-400 font-bold' 
+                            : 'text-gray-500 hover:text-gray-400'
+                        }`}
+                      >
+                        {speakingMessageIdx === idx ? (
+                          <>
+                            <VolumeX className="w-3 h-3 text-rose-400" />
+                            <span className="text-[9px] font-mono text-rose-400">Stop speaking</span>
+                          </>
+                        ) : (
+                          <>
+                            <Volume2 className="w-3.5 h-3.5 text-indigo-400" />
+                            <span className="text-[9px] font-mono text-gray-400">Speak response</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  )}
                 </div>
               ))}
 
@@ -1220,7 +1536,9 @@ Microfyxd is an advanced, high-assurance multi-agent platform orchestrated stric
                   <span className="text-[10px] text-gray-500 mb-1">Microfyxd • Computing Nodes...</span>
                   <div className="flex items-center gap-3 bg-[#111321] border border-indigo-500/20 px-4 py-3 rounded-xl">
                     <RefreshCw className="w-4 h-4 text-indigo-400 animate-spin" />
-                    <span className="text-xs text-indigo-200">Executing LangGraph pipeline...</span>
+                    <span className="text-xs text-indigo-200">
+                      {terminalMode === 'ai-director' ? 'AI Assistant directing system...' : 'Executing LangGraph pipeline...'}
+                    </span>
                   </div>
                 </div>
               )}
@@ -1229,37 +1547,76 @@ Microfyxd is an advanced, high-assurance multi-agent platform orchestrated stric
 
             {/* PRESET SHORTCUTS */}
             <div className="px-4 py-2 bg-[#0a0b12] border-t border-gray-800/40 flex flex-wrap gap-2">
-              <span className="text-[10px] text-gray-500 uppercase tracking-wider self-center mr-1">Workflows:</span>
-              <button 
-                disabled={isRunning}
-                onClick={() => {
-                  setPrompt('Tune coolant temperature bounds and adjust engine maps telemetry diagnostics.');
-                  runLangGraphFlow('Tune coolant temperature bounds and adjust engine maps telemetry diagnostics.');
-                }}
-                className="text-[10px] font-mono bg-[#14172a] hover:bg-indigo-600/25 border border-indigo-500/20 text-indigo-300 px-2.5 py-1 rounded transition"
-              >
-                🏎️ ECU Adjust Map
-              </button>
-              <button 
-                disabled={isRunning}
-                onClick={() => {
-                  setPrompt('Diagnose, compile, and self-heal the broken Sandbox typescript snippet.');
-                  runLangGraphFlow('Diagnose, compile, and self-heal the broken Sandbox typescript snippet.', sandboxCode);
-                }}
-                className="text-[10px] font-mono bg-[#14172a] hover:bg-purple-600/25 border border-purple-500/20 text-purple-300 px-2.5 py-1 rounded transition"
-              >
-                ⚡ Sandbox Self-Heal
-              </button>
-              <button 
-                disabled={isRunning}
-                onClick={() => {
-                  setPrompt('Examine ego perspectives, cognitive profiles, and model introspection traces.');
-                  runLangGraphFlow('Examine ego perspectives, cognitive profiles, and model introspection traces.');
-                }}
-                className="text-[10px] font-mono bg-[#14172a] hover:bg-emerald-600/25 border border-emerald-500/20 text-emerald-300 px-2.5 py-1 rounded transition"
-              >
-                🧠 Ego Introspection
-              </button>
+              <span className="text-[10px] text-gray-500 uppercase tracking-wider self-center mr-1">
+                {terminalMode === 'ai-director' ? 'Direct Actions:' : 'Workflows:'}
+              </span>
+              {terminalMode === 'ai-director' ? (
+                <>
+                  <button 
+                    disabled={isRunning}
+                    onClick={() => {
+                      setPrompt('Show me the Agent Memory tab');
+                      runAiDirectorFlow('Show me the Agent Memory tab');
+                    }}
+                    className="text-[10px] font-mono bg-[#14172a] hover:bg-indigo-600/25 border border-indigo-500/20 text-indigo-300 px-2.5 py-1 rounded transition"
+                  >
+                    🧭 Show memory
+                  </button>
+                  <button 
+                    disabled={isRunning}
+                    onClick={() => {
+                      setPrompt('Execute a successful closed-loop cognition cycle');
+                      runAiDirectorFlow('Execute a successful closed-loop cognition cycle');
+                    }}
+                    className="text-[10px] font-mono bg-[#14172a] hover:bg-emerald-600/25 border border-emerald-500/20 text-emerald-300 px-2.5 py-1 rounded transition"
+                  >
+                    📈 Execute positive loop
+                  </button>
+                  <button 
+                    disabled={isRunning}
+                    onClick={() => {
+                      setPrompt('Add a new priority 8 cognitive goal to optimize engine coolant');
+                      runAiDirectorFlow('Add a new priority 8 cognitive goal to optimize engine coolant');
+                    }}
+                    className="text-[10px] font-mono bg-[#14172a] hover:bg-purple-600/25 border border-purple-500/20 text-purple-300 px-2.5 py-1 rounded transition"
+                  >
+                    🎯 Add cognitive goal
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button 
+                    disabled={isRunning}
+                    onClick={() => {
+                      setPrompt('Tune coolant temperature bounds and adjust engine maps telemetry diagnostics.');
+                      runLangGraphFlow('Tune coolant temperature bounds and adjust engine maps telemetry diagnostics.');
+                    }}
+                    className="text-[10px] font-mono bg-[#14172a] hover:bg-indigo-600/25 border border-indigo-500/20 text-indigo-300 px-2.5 py-1 rounded transition"
+                  >
+                    🏎️ ECU Adjust Map
+                  </button>
+                  <button 
+                    disabled={isRunning}
+                    onClick={() => {
+                      setPrompt('Diagnose, compile, and self-heal the broken Sandbox typescript snippet.');
+                      runLangGraphFlow('Diagnose, compile, and self-heal the broken Sandbox typescript snippet.', sandboxCode);
+                    }}
+                    className="text-[10px] font-mono bg-[#14172a] hover:bg-purple-600/25 border border-purple-500/20 text-purple-300 px-2.5 py-1 rounded transition"
+                  >
+                    ⚡ Sandbox Self-Heal
+                  </button>
+                  <button 
+                    disabled={isRunning}
+                    onClick={() => {
+                      setPrompt('Examine ego perspectives, cognitive profiles, and model introspection traces.');
+                      runLangGraphFlow('Examine ego perspectives, cognitive profiles, and model introspection traces.');
+                    }}
+                    className="text-[10px] font-mono bg-[#14172a] hover:bg-emerald-600/25 border border-emerald-500/20 text-emerald-300 px-2.5 py-1 rounded transition"
+                  >
+                    🧠 Ego Introspection
+                  </button>
+                </>
+              )}
             </div>
 
             {/* INPUT COMMAND LINE */}
@@ -1269,17 +1626,40 @@ Microfyxd is an advanced, high-assurance multi-agent platform orchestrated stric
                 disabled={isRunning}
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') runLangGraphFlow(); }}
-                placeholder="Enter prompt command or select preset..."
+                onKeyDown={(e) => { 
+                  if (e.key === 'Enter') {
+                    if (terminalMode === 'ai-director') {
+                      runAiDirectorFlow();
+                    } else {
+                      runLangGraphFlow();
+                    }
+                  }
+                }}
+                placeholder={terminalMode === 'ai-director' ? "Ask AI to switch tabs, add goals, trigger loop simulations..." : "Enter prompt command or select preset..."}
                 className="flex-1 bg-[#07080f] border border-gray-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/30 rounded-lg px-3.5 py-2 text-xs text-white placeholder-gray-600 font-mono outline-none"
               />
               <button 
                 disabled={isRunning || !prompt.trim()}
-                onClick={() => runLangGraphFlow()}
+                onClick={() => {
+                  if (terminalMode === 'ai-director') {
+                    runAiDirectorFlow();
+                  } else {
+                    runLangGraphFlow();
+                  }
+                }}
                 className="bg-gradient-to-tr from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 disabled:opacity-50 text-white font-mono text-xs px-4 py-2 rounded-lg flex items-center gap-1.5 shadow-lg shadow-indigo-500/10 cursor-pointer font-semibold"
               >
-                <Play className="w-3.5 h-3.5 fill-current" />
-                EXECUTE
+                {terminalMode === 'ai-director' ? (
+                  <>
+                    <MessageSquare className="w-3.5 h-3.5" />
+                    DIRECT
+                  </>
+                ) : (
+                  <>
+                    <Play className="w-3.5 h-3.5 fill-current" />
+                    EXECUTE
+                  </>
+                )}
               </button>
             </div>
           </div>
@@ -3244,271 +3624,445 @@ Microfyxd is an advanced, high-assurance multi-agent platform orchestrated stric
 
                   {/* SUB-SECTION 4: COGNITIVE BRAIN LOOP */}
                   {activeSubSection === 'cognition' && (
-                    <div className="grid grid-cols-12 gap-5">
-                      {/* LEFT COLUMN: SYNAPTIC PLASTICITY MAP & STEP EXECUTION */}
-                      <div className="col-span-12 lg:col-span-7 bg-[#0a0c13] border border-gray-800/40 rounded-xl p-4 flex flex-col gap-4 shadow-sm">
-                        <div className="flex items-center justify-between border-b border-[#1f2937]/40 pb-2.5">
-                          <span className="text-xs font-mono font-bold text-white flex items-center gap-1.5 uppercase">
-                            <Brain className="w-4 h-4 text-pink-400" />
-                            Neuromorphic Plasticity Routing Map (STDP Synapses)
-                          </span>
-                          <span className="text-[10px] font-mono text-gray-500">
-                            Learning Rate (η): 0.15
-                          </span>
-                        </div>
+                    <div className="flex flex-col gap-6">
+                      <div className="grid grid-cols-12 gap-5">
+                        {/* LEFT COLUMN: SYNAPTIC PLASTICITY MAP & STEP EXECUTION */}
+                        <div className="col-span-12 lg:col-span-7 bg-[#0a0c13] border border-gray-800/40 rounded-xl p-4 flex flex-col gap-4 shadow-sm">
+                          <div className="flex items-center justify-between border-b border-[#1f2937]/40 pb-2.5">
+                            <span className="text-xs font-mono font-bold text-white flex items-center gap-1.5 uppercase">
+                              <Brain className="w-4 h-4 text-pink-400" />
+                              Neuromorphic Plasticity Routing Map (STDP Synapses)
+                            </span>
+                            <span className="text-[10px] font-mono text-gray-500">
+                              Learning Rate (η): 0.15
+                            </span>
+                          </div>
 
-                        {/* VISUAL SYNAPSE TOPOLOGY MAP */}
-                        <div className="bg-[#05060a] border border-gray-900 rounded-xl p-4 relative min-h-[180px] flex flex-col justify-center">
-                          <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3 text-center">
-                            {['Perception', 'Planning', 'Action', 'Feedback', 'Learning', 'Controller'].map((nodeName) => {
-                              // Find weights coming from this node
-                              const outwardSynapses = synapseConnections.filter(s => s.fromNode === nodeName);
-                              return (
-                                <div key={nodeName} className="p-2.5 bg-indigo-950/10 border border-gray-850 rounded-lg flex flex-col items-center gap-1">
-                                  <div className="w-6 h-6 rounded-full bg-indigo-950/40 border border-indigo-500/40 flex items-center justify-center text-[10px] text-indigo-400 font-bold">
-                                    {nodeName[0]}
-                                  </div>
-                                  <span className="text-[10px] font-mono font-bold text-gray-200">{nodeName}</span>
-                                  {outwardSynapses.length > 0 && (
-                                    <div className="flex flex-col gap-0.5 mt-1.5 w-full">
-                                      <span className="text-[7.5px] text-gray-500 uppercase tracking-tight">Synapses Out:</span>
-                                      {outwardSynapses.map((syn, sIdx) => (
-                                        <div key={sIdx} className="flex items-center justify-between gap-1 text-[8.5px] font-mono bg-[#090b11] px-1 py-0.5 rounded border border-gray-900">
-                                          <span className="text-gray-500">→ {syn.toNode.slice(0, 4)}</span>
-                                          <span className={`font-bold ${syn.weight > 1.0 ? 'text-emerald-400' : syn.weight < 0.5 ? 'text-rose-400' : 'text-indigo-300'}`}>
-                                            {syn.weight.toFixed(2)}
-                                          </span>
-                                        </div>
-                                      ))}
+                          {/* VISUAL SYNAPSE TOPOLOGY MAP */}
+                          <div className="bg-[#05060a] border border-gray-900 rounded-xl p-4 relative min-h-[180px] flex flex-col justify-center">
+                            <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3 text-center">
+                              {['Perception', 'Planning', 'Action', 'Feedback', 'Learning', 'Controller'].map((nodeName) => {
+                                // Find weights coming from this node
+                                const outwardSynapses = synapseConnections.filter(s => s.fromNode === nodeName);
+                                return (
+                                  <div key={nodeName} className="p-2.5 bg-indigo-950/10 border border-gray-850 rounded-lg flex flex-col items-center gap-1">
+                                    <div className="w-6 h-6 rounded-full bg-indigo-950/40 border border-indigo-500/40 flex items-center justify-center text-[10px] text-indigo-400 font-bold">
+                                      {nodeName[0]}
                                     </div>
-                                  )}
-                                </div>
-                              );
-                            })}
+                                    <span className="text-[10px] font-mono font-bold text-gray-200">{nodeName}</span>
+                                    {outwardSynapses.length > 0 && (
+                                      <div className="flex flex-col gap-0.5 mt-1.5 w-full">
+                                        <span className="text-[7.5px] text-gray-500 uppercase tracking-tight">Synapses Out:</span>
+                                        {outwardSynapses.map((syn, sIdx) => (
+                                          <div key={sIdx} className="flex items-center justify-between gap-1 text-[8.5px] font-mono bg-[#090b11] px-1 py-0.5 rounded border border-gray-900">
+                                            <span className="text-gray-500">→ {syn.toNode.slice(0, 4)}</span>
+                                            <span className={`font-bold ${syn.weight > 1.0 ? 'text-emerald-400' : syn.weight < 0.5 ? 'text-rose-400' : 'text-indigo-300'}`}>
+                                              {syn.weight.toFixed(2)}
+                                            </span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                            
+                            <p className="text-[9.5px] text-gray-500 mt-3 text-center font-mono italic">
+                              STDP Rule: Success potentiates (LTP) synaptic links (limit 2.0). Failure/Doctrine violations depress (LTD) links.
+                            </p>
                           </div>
-                          
-                          <p className="text-[9.5px] text-gray-500 mt-3 text-center font-mono italic">
-                            STDP Rule: Success potentiates (LTP) synaptic links (limit 2.0). Failure/Doctrine violations depress (LTD) links.
-                          </p>
-                        </div>
 
-                        {/* COGNITIVE CLOSED-LOOP CONTROLLER */}
-                        <div className="p-3.5 bg-indigo-950/10 border border-indigo-900/30 rounded-xl flex flex-col gap-3">
-                          <span className="text-[11px] font-bold font-mono text-indigo-400 flex items-center gap-1.5 uppercase">
-                            <Sliders className="w-3.5 h-3.5" />
-                            AgentCore Cognition Closed Loop Controller
-                          </span>
-
-                          <div className="flex flex-wrap gap-2">
-                            <button
-                              onClick={() => handleExecuteCognitionStep('success')}
-                              disabled={isExecutingLoop}
-                              className="px-3 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-gray-850 text-white font-mono font-bold text-[10.5px] rounded cursor-pointer transition flex items-center gap-1.5 border border-emerald-400/20"
-                            >
-                              <Play className="w-3.5 h-3.5" /> Trigger Success Step (LTP)
-                            </button>
-                            <button
-                              onClick={() => handleExecuteCognitionStep('failure')}
-                              disabled={isExecutingLoop}
-                              className="px-3 py-2 bg-amber-600 hover:bg-amber-500 disabled:bg-gray-850 text-white font-mono font-bold text-[10.5px] rounded cursor-pointer transition flex items-center gap-1.5 border border-amber-400/20"
-                            >
-                              <AlertTriangle className="w-3.5 h-3.5" /> Trigger Failure Step (LTD)
-                            </button>
-                            <button
-                              onClick={() => handleExecuteCognitionStep('violation')}
-                              disabled={isExecutingLoop}
-                              className="px-3 py-2 bg-rose-600 hover:bg-rose-500 disabled:bg-gray-850 text-white font-mono font-bold text-[10.5px] rounded cursor-pointer transition flex items-center gap-1.5 border border-rose-400/20"
-                            >
-                              <Shield className="w-3.5 h-3.5 animate-pulse" /> Doctrine Violation Penalty
-                            </button>
-                          </div>
-                        </div>
-
-                        {/* AGENT COGNITIVE EXECUTION TRACE TERMINAL */}
-                        {activeCognitiveLoopStep && (
-                          <div className="bg-[#05060a] border border-gray-900 rounded-xl p-3.5 font-mono text-[10.5px] text-gray-300 flex flex-col gap-2">
-                            <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider flex items-center justify-between border-b border-gray-850 pb-1.5">
-                              <span>Executive Cognition Trace Terminal</span>
-                              <span className={`px-1.5 py-0.5 rounded text-[9px] ${activeCognitiveLoopStep.outcome === 'success' ? 'bg-emerald-950 text-emerald-400 border border-emerald-900/40' : 'bg-rose-950/40 text-rose-400 border border-rose-900/40'}`}>
-                                STATUS: {activeCognitiveLoopStep.outcome.toUpperCase()}
-                              </span>
+                          {/* COGNITIVE CLOSED-LOOP CONTROLLER */}
+                          <div className="p-3.5 bg-indigo-950/10 border border-indigo-900/30 rounded-xl flex flex-col gap-3">
+                            <span className="text-[11px] font-bold font-mono text-indigo-400 flex items-center gap-1.5 uppercase">
+                              <Sliders className="w-3.5 h-3.5" />
+                              AgentCore Cognition Closed Loop Controller
                             </span>
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 bg-[#090b11] p-2.5 rounded border border-gray-850">
-                              <div className="flex flex-col gap-1">
-                                <span className="text-gray-500 text-[9.5px]">ACTIVE COGNITIVE GOAL:</span>
-                                <span className="text-white text-[10.5px] font-bold leading-tight">{activeCognitiveLoopStep.activeGoal}</span>
-                              </div>
-                              <div className="flex flex-col gap-1 font-sans text-gray-400 text-[10px]">
-                                <span className="text-gray-500 font-mono text-[9.5px]">TELEMETRY FEEDBACK SNAPSHOT:</span>
-                                <div className="grid grid-cols-3 gap-1 font-mono text-[9.5px] text-indigo-300 mt-0.5 font-bold">
-                                  <span>CPU: {activeCognitiveLoopStep.snapshot.cpuUsage}</span>
-                                  <span>GPU: {activeCognitiveLoopStep.snapshot.gpuClusterTemp}</span>
-                                  <span>VRAM: {activeCognitiveLoopStep.snapshot.vramUtilization}</span>
-                                </div>
-                              </div>
-                            </div>
-
-                            <div className="flex flex-col gap-1">
-                              <span className="text-gray-500 text-[9.5px]">STEP TRACE PATH:</span>
-                              <div className="space-y-1 pl-2 border-l border-indigo-900/50 mt-1">
-                                {activeCognitiveLoopStep.snapshot.actionTrace.map((tr: string, tIdx: number) => (
-                                  <div key={tIdx} className="text-gray-300 flex items-center gap-1.5">
-                                    <span className="text-indigo-400">[{tIdx + 1}]</span>
-                                    <span>{tr}</span>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* RIGHT COLUMN: GOALS & TASK QUEUE (col-span-5) */}
-                      <div className="col-span-12 lg:col-span-5 flex flex-col gap-5">
-                        {/* COGNITIVE GOALS MANAGEMENT */}
-                        <div className="bg-[#0a0c13] border border-gray-800/40 rounded-xl p-4 flex flex-col gap-3.5 shadow-sm">
-                          <span className="text-xs font-mono font-bold text-white flex items-center gap-1.5 uppercase border-b border-gray-850 pb-2.5">
-                            <Compass className="w-4 h-4 text-indigo-400" />
-                            Synthetic Goals Table ({cognitiveGoals.filter(g => g.status === 'active').length} Active)
-                          </span>
-
-                          {/* ADD GOAL FORM */}
-                          <form onSubmit={handleAddGoal} className="flex flex-col gap-2 bg-[#05060a] p-2.5 border border-gray-900 rounded-lg">
-                            <div className="flex flex-col gap-0.5">
-                              <label className="text-[9.5px] font-mono text-gray-500">NEW GOAL DESCRIPTION:</label>
-                              <input
-                                type="text"
-                                value={newGoalDesc}
-                                onChange={(e) => setNewGoalDesc(e.target.value)}
-                                placeholder="e.g. Reduce sandbox compilation latency"
-                                className="bg-[#090b11] border border-gray-850 rounded px-2.5 py-1.5 text-[10px] text-white outline-none focus:border-indigo-500/50"
-                              />
-                            </div>
-                            <div className="grid grid-cols-2 gap-2">
-                              <div className="flex flex-col gap-0.5">
-                                <label className="text-[9.5px] font-mono text-gray-500">PRIORITY (1-10):</label>
-                                <input
-                                  type="number"
-                                  min="1"
-                                  max="10"
-                                  value={newGoalPriority}
-                                  onChange={(e) => setNewGoalPriority(parseInt(e.target.value))}
-                                  className="bg-[#090b11] border border-gray-850 rounded px-2.5 py-1 text-[10px] text-white outline-none"
-                                />
-                              </div>
+                            <div className="flex flex-wrap gap-2">
                               <button
-                                type="submit"
-                                className="mt-auto py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white font-mono font-bold text-[10px] rounded cursor-pointer transition flex items-center justify-center gap-1"
+                                onClick={() => handleExecuteCognitionStep('success')}
+                                disabled={isExecutingLoop}
+                                className="px-3 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-gray-850 text-white font-mono font-bold text-[10.5px] rounded cursor-pointer transition flex items-center gap-1.5 border border-emerald-400/20"
                               >
-                                <Plus className="w-3 h-3" /> Insert Goal
+                                <Play className="w-3.5 h-3.5" /> Trigger Success Step (LTP)
+                              </button>
+                              <button
+                                onClick={() => handleExecuteCognitionStep('failure')}
+                                disabled={isExecutingLoop}
+                                className="px-3 py-2 bg-amber-600 hover:bg-amber-500 disabled:bg-gray-850 text-white font-mono font-bold text-[10.5px] rounded cursor-pointer transition flex items-center gap-1.5 border border-amber-400/20"
+                              >
+                                <AlertTriangle className="w-3.5 h-3.5" /> Trigger Failure Step (LTD)
+                              </button>
+                              <button
+                                onClick={() => handleExecuteCognitionStep('violation')}
+                                disabled={isExecutingLoop}
+                                className="px-3 py-2 bg-rose-600 hover:bg-rose-500 disabled:bg-gray-850 text-white font-mono font-bold text-[10.5px] rounded cursor-pointer transition flex items-center gap-1.5 border border-rose-400/20"
+                              >
+                                <Shield className="w-3.5 h-3.5 animate-pulse" /> Doctrine Violation Penalty
                               </button>
                             </div>
-                          </form>
-
-                          {/* GOALS LIST */}
-                          <div className="flex flex-col gap-2 max-h-[160px] overflow-y-auto pr-1">
-                            {cognitiveGoals.length === 0 ? (
-                              <p className="text-gray-500 text-center py-4 font-mono text-[10px]">No goals found. Ready to ingest...</p>
-                            ) : (
-                              cognitiveGoals.map((g) => (
-                                <div key={g.id} className="p-2.5 bg-[#05060a] border border-gray-900 rounded-lg flex items-center justify-between gap-3">
-                                  <div className="flex flex-col gap-0.5">
-                                    <span className="text-[10px] font-mono font-bold text-white leading-snug">{g.description}</span>
-                                    <div className="flex items-center gap-2 text-[9px] font-mono text-gray-500">
-                                      <span>Priority: {g.priority}</span>
-                                      <span>•</span>
-                                      <span className={`font-bold ${g.status === 'active' ? 'text-indigo-400' : g.status === 'completed' ? 'text-emerald-400' : 'text-rose-400'}`}>
-                                        {g.status.toUpperCase()}
-                                      </span>
-                                    </div>
-                                  </div>
-                                  {g.status === 'active' && (
-                                    <div className="flex gap-1">
-                                      <button
-                                        onClick={() => handleStatusGoal(g.id, 'completed')}
-                                        className="p-1 hover:bg-emerald-950 text-emerald-400 rounded transition border border-emerald-900/40 cursor-pointer"
-                                        title="Mark Complete"
-                                      >
-                                        <CheckCircle className="w-3 h-3" />
-                                      </button>
-                                      <button
-                                        onClick={() => handleStatusGoal(g.id, 'failed')}
-                                        className="p-1 hover:bg-rose-950 text-rose-400 rounded transition border border-rose-900/40 cursor-pointer"
-                                        title="Mark Failed"
-                                      >
-                                        <AlertTriangle className="w-3 h-3" />
-                                      </button>
-                                    </div>
-                                  )}
-                                </div>
-                              ))
-                            )}
                           </div>
+
+                          {/* AGENT COGNITIVE EXECUTION TRACE TERMINAL */}
+                          {activeCognitiveLoopStep && (
+                            <div className="bg-[#05060a] border border-gray-900 rounded-xl p-3.5 font-mono text-[10.5px] text-gray-300 flex flex-col gap-2">
+                              <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider flex items-center justify-between border-b border-gray-850 pb-1.5">
+                                <span>Executive Cognition Trace Terminal</span>
+                                <span className={`px-1.5 py-0.5 rounded text-[9px] ${activeCognitiveLoopStep.outcome === 'success' ? 'bg-emerald-950 text-emerald-400 border border-emerald-900/40' : 'bg-rose-950/40 text-rose-400 border border-rose-900/40'}`}>
+                                  STATUS: {activeCognitiveLoopStep.outcome.toUpperCase()}
+                                </span>
+                              </span>
+
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 bg-[#090b11] p-2.5 rounded border border-gray-850">
+                                <div className="flex flex-col gap-1">
+                                  <span className="text-gray-500 text-[9.5px]">ACTIVE COGNITIVE GOAL:</span>
+                                  <span className="text-white text-[10.5px] font-bold leading-tight">{activeCognitiveLoopStep.activeGoal}</span>
+                                </div>
+                                <div className="flex flex-col gap-1 font-sans text-gray-400 text-[10px]">
+                                  <span className="text-gray-500 font-mono text-[9.5px]">TELEMETRY FEEDBACK SNAPSHOT:</span>
+                                  <div className="grid grid-cols-3 gap-1 font-mono text-[9.5px] text-indigo-300 mt-0.5 font-bold">
+                                    <span>CPU: {activeCognitiveLoopStep.snapshot.cpuUsage}</span>
+                                    <span>GPU: {activeCognitiveLoopStep.snapshot.gpuClusterTemp}</span>
+                                    <span>VRAM: {activeCognitiveLoopStep.snapshot.vramUtilization}</span>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="flex flex-col gap-1">
+                                <span className="text-gray-500 text-[9.5px]">STEP TRACE PATH:</span>
+                                <div className="space-y-1 pl-2 border-l border-indigo-900/50 mt-1">
+                                  {activeCognitiveLoopStep.snapshot.actionTrace.map((tr: string, tIdx: number) => (
+                                    <div key={tIdx} className="text-gray-300 flex items-center gap-1.5">
+                                      <span className="text-indigo-400">[{tIdx + 1}]</span>
+                                      <span>{tr}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+                          )}
                         </div>
 
-                        {/* COGNITIVE TASK QUEUE */}
-                        <div className="bg-[#0a0c13] border border-gray-800/40 rounded-xl p-4 flex flex-col gap-3.5 shadow-sm">
-                          <span className="text-xs font-mono font-bold text-white flex items-center gap-1.5 uppercase border-b border-gray-850 pb-2.5">
-                            <Activity className="w-4 h-4 text-indigo-400" />
-                            Active Task Queue
-                          </span>
+                        {/* RIGHT COLUMN: GOALS & TASK QUEUE (col-span-5) */}
+                        <div className="col-span-12 lg:col-span-5 flex flex-col gap-5">
+                          {/* COGNITIVE GOALS MANAGEMENT */}
+                          <div className="bg-[#0a0c13] border border-gray-800/40 rounded-xl p-4 flex flex-col gap-3.5 shadow-sm">
+                            <span className="text-xs font-mono font-bold text-white flex items-center gap-1.5 uppercase border-b border-gray-850 pb-2.5">
+                              <Compass className="w-4 h-4 text-indigo-400" />
+                              Synthetic Goals Table ({cognitiveGoals.filter(g => g.status === 'active').length} Active)
+                            </span>
 
-                          {/* ADD TASK FORM */}
-                          <form onSubmit={handleAddTask} className="flex flex-col gap-2 bg-[#05060a] p-2.5 border border-gray-900 rounded-lg">
-                            <div className="flex flex-col gap-0.5">
-                              <label className="text-[9.5px] font-mono text-gray-500">TASK DIRECTIVE OBJECTIVE:</label>
-                              <input
-                                type="text"
-                                value={newTaskAssignedGoal}
-                                onChange={(e) => setNewTaskAssignedGoal(e.target.value)}
-                                placeholder="e.g. Optimize GPU core thermal throttling map"
-                                className="bg-[#090b11] border border-gray-850 rounded px-2.5 py-1.5 text-[10px] text-white outline-none focus:border-indigo-500/50"
-                              />
-                            </div>
-                            <div className="grid grid-cols-2 gap-2">
+                            {/* ADD GOAL FORM */}
+                            <form onSubmit={handleAddGoal} className="flex flex-col gap-2 bg-[#05060a] p-2.5 border border-gray-900 rounded-lg">
                               <div className="flex flex-col gap-0.5">
-                                <label className="text-[9.5px] font-mono text-gray-500">SOURCE:</label>
-                                <select
-                                  value={newTaskSource}
-                                  onChange={(e) => setNewTaskSource(e.target.value)}
-                                  className="bg-[#090b11] border border-gray-850 text-gray-300 rounded px-2.5 py-1 text-[10px] outline-none"
-                                >
-                                  <option value="human">Human Operator</option>
-                                  <option value="telemetry">Anomalous Telemetry</option>
-                                  <option value="doctrine">Doctrine Constraint</option>
-                                </select>
+                                <label className="text-[9.5px] font-mono text-gray-500">NEW GOAL DESCRIPTION:</label>
+                                <input
+                                  type="text"
+                                  value={newGoalDesc}
+                                  onChange={(e) => setNewGoalDesc(e.target.value)}
+                                  placeholder="e.g. Reduce sandbox compilation latency"
+                                  className="bg-[#090b11] border border-gray-850 rounded px-2.5 py-1.5 text-[10px] text-white outline-none focus:border-indigo-500/50"
+                                />
                               </div>
+                              <div className="grid grid-cols-2 gap-2">
+                                <div className="flex flex-col gap-0.5">
+                                  <label className="text-[9.5px] font-mono text-gray-500">PRIORITY (1-10):</label>
+                                  <input
+                                    type="number"
+                                    min="1"
+                                    max="10"
+                                    value={newGoalPriority}
+                                    onChange={(e) => setNewGoalPriority(parseInt(e.target.value))}
+                                    className="bg-[#090b11] border border-gray-850 rounded px-2.5 py-1 text-[10px] text-white outline-none"
+                                  />
+                                </div>
+                                <button
+                                  type="submit"
+                                  className="mt-auto py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white font-mono font-bold text-[10px] rounded cursor-pointer transition flex items-center justify-center gap-1"
+                                >
+                                  <Plus className="w-3 h-3" /> Insert Goal
+                                </button>
+                              </div>
+                            </form>
+
+                            {/* GOALS LIST */}
+                            <div className="flex flex-col gap-2 max-h-[160px] overflow-y-auto pr-1">
+                              {cognitiveGoals.length === 0 ? (
+                                <p className="text-gray-500 text-center py-4 font-mono text-[10px]">No goals found. Ready to ingest...</p>
+                              ) : (
+                                cognitiveGoals.map((g) => (
+                                  <div key={g.id} className="p-2.5 bg-[#05060a] border border-gray-900 rounded-lg flex items-center justify-between gap-3">
+                                    <div className="flex flex-col gap-0.5">
+                                      <span className="text-[10px] font-mono font-bold text-white leading-snug">{g.description}</span>
+                                      <div className="flex items-center gap-2 text-[9px] font-mono text-gray-500">
+                                        <span>Priority: {g.priority}</span>
+                                        <span>•</span>
+                                        <span className={`font-bold ${g.status === 'active' ? 'text-indigo-400' : g.status === 'completed' ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                          {g.status.toUpperCase()}
+                                        </span>
+                                      </div>
+                                    </div>
+                                    {g.status === 'active' && (
+                                      <div className="flex gap-1">
+                                        <button
+                                          onClick={() => handleStatusGoal(g.id, 'completed')}
+                                          className="p-1 hover:bg-emerald-950 text-emerald-400 rounded transition border border-emerald-900/40 cursor-pointer"
+                                          title="Mark Complete"
+                                        >
+                                          <CheckCircle className="w-3 h-3" />
+                                        </button>
+                                        <button
+                                          onClick={() => handleStatusGoal(g.id, 'failed')}
+                                          className="p-1 hover:bg-rose-950 text-rose-400 rounded transition border border-rose-900/40 cursor-pointer"
+                                          title="Mark Failed"
+                                        >
+                                          <AlertTriangle className="w-3 h-3" />
+                                        </button>
+                                      </div>
+                                    )}
+                                  </div>
+                                ))
+                              )}
+                            </div>
+                          </div>
+
+                          {/* COGNITIVE TASK QUEUE */}
+                          <div className="bg-[#0a0c13] border border-gray-800/40 rounded-xl p-4 flex flex-col gap-3.5 shadow-sm">
+                            <span className="text-xs font-mono font-bold text-white flex items-center gap-1.5 uppercase border-b border-gray-850 pb-2.5">
+                              <Activity className="w-4 h-4 text-indigo-400" />
+                              Active Task Queue
+                            </span>
+
+                            {/* ADD TASK FORM */}
+                            <form onSubmit={handleAddTask} className="flex flex-col gap-2 bg-[#05060a] p-2.5 border border-gray-900 rounded-lg">
+                              <div className="flex flex-col gap-0.5">
+                                <label className="text-[9.5px] font-mono text-gray-500">TASK DIRECTIVE OBJECTIVE:</label>
+                                <input
+                                  type="text"
+                                  value={newTaskAssignedGoal}
+                                  onChange={(e) => setNewTaskAssignedGoal(e.target.value)}
+                                  placeholder="e.g. Optimize GPU core thermal throttling map"
+                                  className="bg-[#090b11] border border-gray-850 rounded px-2.5 py-1.5 text-[10px] text-white outline-none focus:border-indigo-500/50"
+                                />
+                              </div>
+                              <div className="grid grid-cols-2 gap-2">
+                                <div className="flex flex-col gap-0.5">
+                                  <label className="text-[9.5px] font-mono text-gray-500">SOURCE:</label>
+                                  <select
+                                    value={newTaskSource}
+                                    onChange={(e) => setNewTaskSource(e.target.value)}
+                                    className="bg-[#090b11] border border-gray-850 text-gray-300 rounded px-2.5 py-1 text-[10px] outline-none"
+                                  >
+                                    <option value="human">Human Operator</option>
+                                    <option value="telemetry">Anomalous Telemetry</option>
+                                    <option value="doctrine">Doctrine Constraint</option>
+                                  </select>
+                                </div>
+                                <button
+                                  type="submit"
+                                  className="mt-auto py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white font-mono font-bold text-[10px] rounded cursor-pointer transition flex items-center justify-center gap-1"
+                                >
+                                  <Plus className="w-3 h-3" /> Queue Task
+                                </button>
+                              </div>
+                            </form>
+
+                            {/* TASKS LIST */}
+                            <div className="flex flex-col gap-2 max-h-[160px] overflow-y-auto pr-1">
+                              {cognitiveTasks.length === 0 ? (
+                                <p className="text-gray-500 text-center py-4 font-mono text-[10px]">No tasks queued. Sandbox loop is idle.</p>
+                              ) : (
+                                cognitiveTasks.map((t) => (
+                                  <div key={t.id} className="p-2.5 bg-[#05060a] border border-gray-900 rounded-lg flex flex-col gap-1">
+                                    <div className="flex items-start justify-between gap-2">
+                                      <span className="text-[10px] font-mono font-bold text-white leading-snug">{t.assignedGoal}</span>
+                                      <span className={`text-[8.5px] font-mono uppercase px-1.5 py-0.5 rounded border ${t.status === 'queued' ? 'bg-indigo-950 text-indigo-400 border-indigo-900/40' : 'bg-gray-950 text-gray-500 border-gray-900/40'}`}>
+                                        {t.status}
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center gap-2 text-[9px] font-mono text-gray-500">
+                                      <span className="text-indigo-400 capitalize">Source: {t.source}</span>
+                                      <span>•</span>
+                                      <span>Priority: {t.priority}</span>
+                                    </div>
+                                  </div>
+                                ))
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* SUB-SECTION 4.2: LONG-TERM MEMORY (LTM) MATRIX */}
+                      <div className="bg-[#0a0c13] border border-gray-800/40 rounded-xl p-5 flex flex-col gap-4 shadow-sm">
+                        <div className="flex flex-wrap items-center justify-between border-b border-[#1f2937]/40 pb-3 gap-3">
+                          <span className="text-xs font-mono font-bold text-white flex items-center gap-1.5 uppercase">
+                            <Database className="w-4 h-4 text-cyan-400" />
+                            AgentCore Long-Term Memory (LTM) Matrix ({agentMemories.length} Nodes)
+                          </span>
+                          <span className="text-[10px] font-mono text-gray-500">
+                            Confidence Filter Heuristics (H0): Active
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-1 xl:grid-cols-12 gap-5">
+                          {/* NEW MEMORY WRITER FORM */}
+                          <div className="xl:col-span-4 bg-[#05060a] border border-gray-900 rounded-xl p-4 flex flex-col gap-3.5">
+                            <span className="text-[11px] font-bold font-mono text-cyan-400 flex items-center gap-1.5 uppercase">
+                              <Plus className="w-3.5 h-3.5" /> Write New Memory Node
+                            </span>
+
+                            <form onSubmit={handleAddMemory} className="flex flex-col gap-3">
+                              <div className="grid grid-cols-2 gap-2">
+                                <div className="flex flex-col gap-1">
+                                  <label className="text-[9.5px] font-mono text-gray-500 uppercase">Tenant ID:</label>
+                                  <input
+                                    type="text"
+                                    value={newMemoryTenantId}
+                                    onChange={(e) => setNewMemoryTenantId(e.target.value)}
+                                    placeholder="system-wide"
+                                    className="bg-[#090b11] border border-gray-850 rounded px-2.5 py-1.5 text-[10px] text-white outline-none focus:border-cyan-500/50 font-mono"
+                                  />
+                                </div>
+                                <div className="flex flex-col gap-1">
+                                  <label className="text-[9.5px] font-mono text-gray-500 uppercase">Memory Type:</label>
+                                  <select
+                                    value={newMemoryType}
+                                    onChange={(e) => setNewMemoryType(e.target.value)}
+                                    className="bg-[#090b11] border border-gray-850 text-gray-300 text-[10px] rounded px-2.5 py-1.5 outline-none font-mono"
+                                  >
+                                    <option value="episodic">Episodic</option>
+                                    <option value="semantic">Semantic</option>
+                                    <option value="procedural">Procedural</option>
+                                    <option value="associative">Associative</option>
+                                  </select>
+                                </div>
+                              </div>
+
+                              <div className="flex flex-col gap-1">
+                                <label className="text-[9.5px] font-mono text-gray-500 uppercase">Memory Index Key:</label>
+                                <input
+                                  type="text"
+                                  value={newMemoryKey}
+                                  onChange={(e) => setNewMemoryKey(e.target.value)}
+                                  placeholder="e.g. system_state_heuristic"
+                                  className="bg-[#090b11] border border-gray-850 rounded px-2.5 py-1.5 text-[10px] text-white outline-none focus:border-cyan-500/50 font-mono"
+                                  required
+                                />
+                              </div>
+
+                              <div className="flex flex-col gap-1">
+                                <label className="text-[9.5px] font-mono text-gray-500 uppercase">Synthesized Value Heuristic:</label>
+                                <textarea
+                                  value={newMemoryValue}
+                                  onChange={(e) => setNewMemoryValue(e.target.value)}
+                                  placeholder="e.g. Optimized parameters applied to Sandbox"
+                                  className="bg-[#090b11] border border-gray-850 rounded px-2.5 py-1.5 text-[10px] text-white outline-none focus:border-cyan-500/50 min-h-[60px] resize-none font-mono"
+                                  required
+                                />
+                              </div>
+
+                              <div className="flex flex-col gap-1">
+                                <label className="text-[9.5px] font-mono text-gray-500 uppercase flex justify-between">
+                                  <span>Confidence Score:</span>
+                                  <span className="text-cyan-400 font-bold">{(newMemoryConfidence * 100).toFixed(0)}%</span>
+                                </label>
+                                <input
+                                  type="range"
+                                  min="0.1"
+                                  max="1.0"
+                                  step="0.05"
+                                  value={newMemoryConfidence}
+                                  onChange={(e) => setNewMemoryConfidence(parseFloat(e.target.value))}
+                                  className="w-full accent-cyan-500"
+                                />
+                              </div>
+
                               <button
                                 type="submit"
-                                className="mt-auto py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white font-mono font-bold text-[10px] rounded cursor-pointer transition flex items-center justify-center gap-1"
+                                className="w-full py-2 bg-cyan-600 hover:bg-cyan-500 text-white font-mono font-bold text-[10.5px] rounded cursor-pointer transition flex items-center justify-center gap-1.5 border border-cyan-500/20"
                               >
-                                <Plus className="w-3 h-3" /> Queue Task
+                                <Plus className="w-3.5 h-3.5" /> Commit to LTM Table
                               </button>
-                            </div>
-                          </form>
+                            </form>
+                          </div>
 
-                          {/* TASKS LIST */}
-                          <div className="flex flex-col gap-2 max-h-[160px] overflow-y-auto pr-1">
-                            {cognitiveTasks.length === 0 ? (
-                              <p className="text-gray-500 text-center py-4 font-mono text-[10px]">No tasks queued. Sandbox loop is idle.</p>
-                            ) : (
-                              cognitiveTasks.map((t) => (
-                                <div key={t.id} className="p-2.5 bg-[#05060a] border border-gray-900 rounded-lg flex flex-col gap-1">
-                                  <div className="flex items-start justify-between gap-2">
-                                    <span className="text-[10px] font-mono font-bold text-white leading-snug">{t.assignedGoal}</span>
-                                    <span className={`text-[8.5px] font-mono uppercase px-1.5 py-0.5 rounded border ${t.status === 'queued' ? 'bg-indigo-950 text-indigo-400 border-indigo-900/40' : 'bg-gray-950 text-gray-500 border-gray-900/40'}`}>
-                                      {t.status}
-                                    </span>
-                                  </div>
-                                  <div className="flex items-center gap-2 text-[9px] font-mono text-gray-500">
-                                    <span className="text-indigo-400 capitalize">Source: {t.source}</span>
-                                    <span>•</span>
-                                    <span>Priority: {t.priority}</span>
-                                  </div>
-                                </div>
-                              ))
-                            )}
+                          {/* MEMORIES VIEWER AND ACTIONS */}
+                          <div className="xl:col-span-8 flex flex-col gap-3">
+                            <span className="text-[11px] font-bold font-mono text-cyan-400 flex items-center gap-1.5 uppercase">
+                              <Layers className="w-3.5 h-3.5" /> Stored Memory Associations Matrix
+                            </span>
+
+                            <div className="flex-1 bg-[#05060a] border border-gray-900 rounded-xl overflow-hidden flex flex-col max-h-[350px]">
+                              <div className="overflow-y-auto flex-1">
+                                <table className="w-full text-[10.5px] font-mono text-left border-collapse">
+                                  <thead>
+                                    <tr className="bg-[#090b11] border-b border-gray-850 text-gray-400">
+                                      <th className="p-2.5 font-bold uppercase tracking-wider text-[9px]">Type/Tenant</th>
+                                      <th className="p-2.5 font-bold uppercase tracking-wider text-[9px]">Key Index</th>
+                                      <th className="p-2.5 font-bold uppercase tracking-wider text-[9px]">Value Heuristic</th>
+                                      <th className="p-2.5 font-bold uppercase tracking-wider text-[9px] text-center">Confidence</th>
+                                      <th className="p-2.5 font-bold uppercase tracking-wider text-[9px] text-center">Accesses</th>
+                                      <th className="p-2.5 font-bold uppercase tracking-wider text-[9px] text-right">Actions</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-gray-850">
+                                    {agentMemories.length === 0 ? (
+                                      <tr>
+                                        <td colSpan={6} className="p-8 text-center text-gray-500 italic">
+                                          Cognitive memory matrix is empty. Ready to index...
+                                        </td>
+                                      </tr>
+                                    ) : (
+                                      agentMemories.map((mem) => (
+                                        <tr key={mem.id} className="hover:bg-[#07090f] transition">
+                                          <td className="p-2.5">
+                                            <div className="flex flex-col gap-0.5">
+                                              <span className="text-[9.5px] font-bold text-cyan-400 uppercase tracking-tight">{mem.memoryType}</span>
+                                              <span className="text-[8.5px] text-gray-500">{mem.tenantId}</span>
+                                            </div>
+                                          </td>
+                                          <td className="p-2.5 font-bold text-gray-300 truncate max-w-[120px]" title={mem.key}>
+                                            {mem.key}
+                                          </td>
+                                          <td className="p-2.5 text-gray-400 truncate max-w-[180px]" title={mem.value}>
+                                            {mem.value}
+                                          </td>
+                                          <td className="p-2.5 text-center">
+                                            <span className={`text-[10px] font-bold ${mem.confidence >= 0.8 ? 'text-emerald-400' : mem.confidence >= 0.5 ? 'text-cyan-400' : 'text-amber-400'}`}>
+                                              {(mem.confidence * 100).toFixed(0)}%
+                                            </span>
+                                          </td>
+                                          <td className="p-2.5 text-center text-gray-300 font-bold">
+                                            {mem.accessCount}
+                                          </td>
+                                          <td className="p-2.5 text-right">
+                                            <div className="flex items-center justify-end gap-1.5">
+                                              <button
+                                                onClick={() => handleAccessMemory(mem.id)}
+                                                className="p-1 px-1.5 text-[9.5px] bg-cyan-950/40 hover:bg-cyan-900/60 text-cyan-400 border border-cyan-900/40 rounded transition cursor-pointer flex items-center gap-1"
+                                                title="Trigger Retrieval & Update Count"
+                                              >
+                                                <RefreshCw className="w-2.5 h-2.5" /> Access
+                                              </button>
+                                              <button
+                                                onClick={() => handleDeleteMemory(mem.id)}
+                                                className="p-1 px-1.5 text-[9.5px] bg-rose-950/40 hover:bg-rose-900/60 text-rose-400 border border-rose-900/40 rounded transition cursor-pointer flex items-center gap-1"
+                                                title="Purge Memory Node"
+                                              >
+                                                <Trash2 className="w-2.5 h-2.5" /> Purge
+                                              </button>
+                                            </div>
+                                          </td>
+                                        </tr>
+                                      ))
+                                    )}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </div>
                           </div>
                         </div>
                       </div>

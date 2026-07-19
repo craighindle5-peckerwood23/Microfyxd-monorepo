@@ -3,13 +3,13 @@ import path from 'path';
 import fs from 'fs';
 import dns from 'dns';
 import { createServer as createViteServer } from 'vite';
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI, Type } from '@google/genai';
 
 // Database & Auth relative imports (with required .ts extensions for ESM)
 import { requireAuth, AuthRequest } from './src/middleware/auth.ts';
 import { getOrCreateUser } from './src/db/users.ts';
 import { db } from './src/db/index.ts';
-import { favorites, auditLogs, users, goals, tasks, synapses } from './src/db/schema.ts';
+import { favorites, auditLogs, users, goals, tasks, synapses, agentMemory } from './src/db/schema.ts';
 import { eq, and, desc } from 'drizzle-orm';
 
 // Relative imports from our monorepo packages in the workspace
@@ -468,6 +468,148 @@ Generate a markdown response:
     }
   });
 
+  // API Route: AI Chat box UI/System Controller
+  app.post('/api/chat', async (req, res) => {
+    const { prompt, history } = req.body;
+
+    try {
+      if (!prompt) {
+        return res.status(400).json({ success: false, error: 'Missing prompt parameter.' });
+      }
+
+      if (!ai) {
+        // Basic rule-based fallback if Gemini API is not configured
+        const lower = prompt.toLowerCase();
+        let reply = "I am ready to help you direct the Microfyxd System, but your Gemini API Key is not set in Settings > Secrets. I can perform simple rule-based local routing:";
+        const actions: any[] = [];
+
+        if (lower.includes('cockpit') || lower.includes('telemetry') || lower.includes('home')) {
+          actions.push({ type: 'SET_ACTIVE_TAB', payload: { tab: 'cockpit' } });
+          reply += "\n- Navigating to **Cockpit Control Panel**.";
+        } else if (lower.includes('sandbox') || lower.includes('compile') || lower.includes('diagnostic') || lower.includes('heal') || lower.includes('code')) {
+          actions.push({ type: 'SET_ACTIVE_TAB', payload: { tab: 'sandbox' } });
+          reply += "\n- Navigating to **Code Sandbox**.";
+        } else if (lower.includes('memory') || lower.includes('memories')) {
+          actions.push({ type: 'SET_ACTIVE_TAB', payload: { tab: 'memory' } });
+          reply += "\n- Navigating to **Agent Memories Matrix**.";
+        } else if (lower.includes('doctrine') || lower.includes('compliance')) {
+          actions.push({ type: 'SET_ACTIVE_TAB', payload: { tab: 'doctrine' } });
+          reply += "\n- Navigating to **System Doctrine Guardrails**.";
+        } else if (lower.includes('integration') || lower.includes('vercel') || lower.includes('dns')) {
+          actions.push({ type: 'SET_ACTIVE_TAB', payload: { tab: 'integrations' } });
+          reply += "\n- Navigating to **Vercel/DNS Integrations**.";
+        }
+
+        if (lower.includes('cognition') || lower.includes('sim') || lower.includes('loop')) {
+          actions.push({ type: 'SET_ACTIVE_TAB', payload: { tab: 'integrations' } });
+          actions.push({ type: 'SET_ACTIVE_SUBSECTION', payload: { subSection: 'cognition' } });
+          reply += "\n- Shifting view to **Cognition Simulator**.";
+        }
+
+        if (lower.includes('execute') || lower.includes('run loop') || lower.includes('simulate loop') || lower.includes('loop execution')) {
+          const outcome = lower.includes('fail') ? 'failure' : lower.includes('violation') ? 'violation' : 'success';
+          actions.push({ type: 'EXECUTE_COGNITION_LOOP', payload: { outcome } });
+          reply += `\n- Initiating cognition loop execution simulation with outcome: **${outcome}**.`;
+        }
+
+        if (actions.length === 0) {
+          reply += "\n- *Awaiting a direct instruction to shift views or trigger simulation loops. Try: 'Navigate to sandbox' or 'Execute cognition loop'.*";
+        }
+
+        return res.json({ success: true, reply, actions });
+      }
+
+      // We have AI client! Prepare structured generation parameters
+      const systemInstruction = `
+You are the central system control AI Assistant inside the Microfyxd AI Enterprise System.
+Your task is to help the operator direct the UI and the system via conversation.
+You can generate conversational text responses AND dispatch real-time actions to update state and execute routines.
+
+Available UI/system actions:
+- SET_ACTIVE_TAB: Navigates to a specific tab. Payload: { tab: 'cockpit'|'traces'|'files'|'phenotype'|'ego'|'infra'|'sandbox'|'memory'|'doctrine'|'workspace'|'integrations' }
+- SET_ACTIVE_SUBSECTION: Inside the 'integrations' tab, sets the sub-section. Payload: { subSection: 'injections'|'namecheap'|'vercel'|'cognition' }
+- EXECUTE_COGNITION_LOOP: Triggers closed-loop STDP neuromorphic adaptation simulation step. Payload: { outcome: 'success'|'failure'|'violation' }
+- ADD_COGNITIVE_GOAL: Inserts a new synthetic system goal. Payload: { description: string, priority: number (1-10), constraints: string }
+- ADD_COGNITIVE_TASK: Adds a task to the queue. Payload: { source: string, priority: number, assignedGoal: string }
+- ADD_MEMORY: Inserts a key-value record into the neural memory matrix. Payload: { key: string, value: string, memoryType: 'episodic'|'semantic'|'working', confidence: number }
+- TOGGLE_SAFETY_OVERRIDE: Changes system safety watchdog override state. Payload: { engaged: boolean }
+
+Strictly analyze the user prompt and generate relevant actions to match their intent. If they just want to chat or ask informational questions, return an empty actions array. Be concise, intelligent, and highly capable.
+`;
+
+      const contents = [];
+      if (history && Array.isArray(history)) {
+        for (const msg of history) {
+          contents.push({
+            role: msg.role === 'user' ? 'user' : 'model',
+            parts: [{ text: msg.content }]
+          });
+        }
+      }
+      contents.push({
+        role: 'user',
+        parts: [{ text: prompt }]
+      });
+
+      const responseSchema = {
+        type: Type.OBJECT,
+        properties: {
+          reply: {
+            type: Type.STRING,
+            description: "The direct markdown reply explaining the response or what actions are being performed."
+          },
+          actions: {
+            type: Type.ARRAY,
+            description: "An array of one or more structured actions representing the UI/system control directives.",
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                type: {
+                  type: Type.STRING,
+                  description: "SET_ACTIVE_TAB, SET_ACTIVE_SUBSECTION, EXECUTE_COGNITION_LOOP, ADD_COGNITIVE_GOAL, ADD_COGNITIVE_TASK, ADD_MEMORY, TOGGLE_SAFETY_OVERRIDE"
+                },
+                payload: {
+                  type: Type.OBJECT,
+                  description: "The payload corresponding to the action type."
+                }
+              },
+              required: ["type", "payload"]
+            }
+          }
+        },
+        required: ["reply"]
+      };
+
+      const response = await ai.models.generateContent({
+        model: 'gemini-3.5-flash',
+        contents,
+        config: {
+          systemInstruction,
+          responseMimeType: 'application/json',
+          responseSchema
+        }
+      });
+
+      if (response.text) {
+        const parsed = JSON.parse(response.text.trim());
+        return res.json({
+          success: true,
+          reply: parsed.reply,
+          actions: parsed.actions || []
+        });
+      } else {
+        throw new Error("No response text received from the model.");
+      }
+
+    } catch (err: any) {
+      console.error('[API CHAT ERROR]', err);
+      res.status(500).json({
+        success: false,
+        error: err.message || String(err)
+      });
+    }
+  });
+
   // API Route: Get files from monorepo for file browser
   app.get('/api/files', (req, res) => {
     const filePaths = [
@@ -834,8 +976,26 @@ Generate a markdown response:
       // 3. Fetch current synapse weights to simulate routing map traversal
       let currentSynapses = await db.select().from(synapses);
       if (currentSynapses.length === 0) {
-        // Trigger self-seed
-        await fetch(`http://localhost:3000/api/cognition/synapses`);
+        const defaultPairs = [
+          { fromNode: 'Perception', toNode: 'Planning', weight: 1.0 },
+          { fromNode: 'Planning', toNode: 'Action', weight: 1.0 },
+          { fromNode: 'Action', toNode: 'Feedback', weight: 1.0 },
+          { fromNode: 'Feedback', toNode: 'Learning', weight: 1.0 },
+          { fromNode: 'Learning', toNode: 'Controller', weight: 1.0 },
+          { fromNode: 'Controller', toNode: 'Perception', weight: 1.0 },
+          { fromNode: 'Planning', toNode: 'Sandbox', weight: 0.8 },
+          { fromNode: 'Sandbox', toNode: 'Feedback', weight: 0.9 },
+          { fromNode: 'Planning', toNode: 'Database', weight: 0.75 },
+          { fromNode: 'Database', toNode: 'Feedback', weight: 0.85 },
+        ];
+
+        for (const pair of defaultPairs) {
+          await db.insert(synapses).values({
+            fromNode: pair.fromNode,
+            toNode: pair.toNode,
+            weight: pair.weight,
+          });
+        }
         currentSynapses = await db.select().from(synapses);
       }
 
@@ -892,6 +1052,68 @@ Generate a markdown response:
         synapses: updatedSynapses
       });
 
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // API Route: Get all agent memories
+  app.get('/api/cognition/memories', async (req, res) => {
+    try {
+      const memories = await db.select().from(agentMemory).orderBy(desc(agentMemory.createdAt));
+      res.json({ success: true, memories });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // API Route: Insert a new agent memory
+  app.post('/api/cognition/memories', async (req, res) => {
+    const { tenantId, memoryType, key, value, confidence } = req.body;
+    try {
+      const newMemory = await db.insert(agentMemory).values({
+        tenantId: tenantId || 'system-wide',
+        memoryType: memoryType || 'episodic',
+        key: key || 'system_state_heuristic',
+        value: value || 'Optimized parameters applied',
+        confidence: confidence ? parseFloat(confidence) : 1.0,
+        accessCount: 0,
+      }).returning();
+      res.json({ success: true, memory: newMemory[0] });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // API Route: Record access / update memory statistics
+  app.post('/api/cognition/memories/:id/access', async (req, res) => {
+    const { id } = req.params;
+    try {
+      // Find current memory to get the access count
+      const memoryList = await db.select().from(agentMemory).where(eq(agentMemory.id, parseInt(id))).limit(1);
+      if (memoryList.length === 0) {
+        return res.status(404).json({ success: false, error: 'Memory not found' });
+      }
+      const current = memoryList[0];
+      const updated = await db.update(agentMemory)
+        .set({
+          accessCount: current.accessCount + 1,
+          lastAccessed: new Date(),
+        })
+        .where(eq(agentMemory.id, parseInt(id)))
+        .returning();
+      res.json({ success: true, memory: updated[0] });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // API Route: Delete a specific memory record
+  app.delete('/api/cognition/memories/:id', async (req, res) => {
+    const { id } = req.params;
+    try {
+      await db.delete(agentMemory).where(eq(agentMemory.id, parseInt(id)));
+      res.json({ success: true, message: 'Memory successfully purged from cognition matrix.' });
     } catch (err: any) {
       res.status(500).json({ success: false, error: err.message });
     }
