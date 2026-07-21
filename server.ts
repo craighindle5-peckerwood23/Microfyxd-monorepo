@@ -468,6 +468,75 @@ Generate a markdown response:
     }
   });
 
+  // Helper for rule-based fallback
+  function getRuleBasedFallback(prompt: string, isNetworkError: boolean = false) {
+    const lower = prompt.toLowerCase();
+    let reply = isNetworkError 
+      ? "⚠️ **Service Connection Alert**: The system encountered a temporary network timeout reaching the AI Director. I've automatically engaged the local fallback controller to execute your instructions:"
+      : "I am ready to help you direct the Microfyxd System, but your Gemini API Key is not set in Settings > Secrets. I can perform simple rule-based local routing:";
+    const actions: any[] = [];
+
+    if (lower.includes('diagnose') || lower.includes('diagnostic') || lower.includes('scan system') || lower.includes('diagnose its self')) {
+      actions.push({ type: 'TRIGGER_DIAGNOSTICS' });
+      reply += "\n- Navigating to **Central Cockpit** and initiating a **Full System Self-Diagnostic Scan**.";
+    } else if (lower.includes('self-heal') || lower.includes('auto-heal') || lower.includes('fix persistent') || lower.includes('healed') || lower.includes('heal system') || lower.includes('fix perstitsnct')) {
+      actions.push({ type: 'TRIGGER_AUTO_HEAL' });
+      reply += "\n- Navigating to **Central Cockpit** and engaging the **Autonomous Auto-Healing Engine** to address persistent issues.";
+    } else if (lower.includes('quantum') || lower.includes('tune') || lower.includes('calibrate') || lower.includes('resonance') || lower.includes('tuner')) {
+      actions.push({ type: 'TRIGGER_QUANTUM_TUNING' });
+      reply += "\n- Navigating to **Quantum Bio-Neural Tuning** and initiating a **Neural Resonance Calibration Sweep**.";
+    } else if (lower.includes('cockpit') || lower.includes('telemetry') || lower.includes('home')) {
+      actions.push({ type: 'SET_ACTIVE_TAB', payload: { tab: 'cockpit' } });
+      reply += "\n- Navigating to **Cockpit Control Panel**.";
+    } else if (lower.includes('sandbox') || lower.includes('compile') || lower.includes('code')) {
+      actions.push({ type: 'SET_ACTIVE_TAB', payload: { tab: 'sandbox' } });
+      reply += "\n- Navigating to **Code Sandbox**.";
+    } else if (lower.includes('memory') || lower.includes('memories')) {
+      actions.push({ type: 'SET_ACTIVE_TAB', payload: { tab: 'memory' } });
+      reply += "\n- Navigating to **Agent Memories Matrix**.";
+    } else if (lower.includes('doctrine') || lower.includes('compliance')) {
+      actions.push({ type: 'SET_ACTIVE_TAB', payload: { tab: 'doctrine' } });
+      reply += "\n- Navigating to **System Doctrine Guardrails**.";
+    } else if (lower.includes('integration') || lower.includes('vercel') || lower.includes('dns')) {
+      actions.push({ type: 'SET_ACTIVE_TAB', payload: { tab: 'integrations' } });
+      reply += "\n- Navigating to **Vercel/DNS Integrations**.";
+    }
+
+    if (lower.includes('cognition') || lower.includes('sim') || lower.includes('loop')) {
+      actions.push({ type: 'SET_ACTIVE_TAB', payload: { tab: 'integrations' } });
+      actions.push({ type: 'SET_ACTIVE_SUBSECTION', payload: { subSection: 'cognition' } });
+      reply += "\n- Shifting view to **Cognition Simulator**.";
+    }
+
+    if (lower.includes('execute') || lower.includes('run loop') || lower.includes('simulate loop') || lower.includes('loop execution') || lower.includes('positive loop')) {
+      const outcome = lower.includes('fail') ? 'failure' : lower.includes('violation') ? 'violation' : 'success';
+      actions.push({ type: 'EXECUTE_COGNITION_LOOP', payload: { outcome } });
+      reply += `\n- Initiating cognition loop execution simulation with outcome: **${outcome}**.`;
+    }
+
+    if (lower.includes('goal') || lower.includes('add cognitive goal') || lower.includes('priority')) {
+      actions.push({ 
+        type: 'ADD_COGNITIVE_GOAL', 
+        payload: { 
+          description: prompt.replace(/add a new priority \d+ cognitive goal to|add goal/i, '').trim() || 'Optimize motor subsystem parameters', 
+          priority: 8, 
+          constraints: 'Telemetry bounds safety checks' 
+        } 
+      });
+      reply += "\n- Dispatched custom action: **ADD_COGNITIVE_GOAL**.";
+    }
+
+    if (actions.length === 0) {
+      if (isNetworkError) {
+        reply += "\n- No specific action identified from your prompt. However, you can command me to 'Show the Agent Memory tab', 'Execute positive loop', or 'Add cognitive goal'.";
+      } else {
+        reply += "\n- *Awaiting a direct instruction to shift views or trigger simulation loops. Try: 'Navigate to sandbox' or 'Execute cognition loop'.*";
+      }
+    }
+
+    return { reply, actions };
+  }
+
   // API Route: AI Chat box UI/System Controller
   app.post('/api/chat', async (req, res) => {
     const { prompt, history } = req.body;
@@ -478,45 +547,8 @@ Generate a markdown response:
       }
 
       if (!ai) {
-        // Basic rule-based fallback if Gemini API is not configured
-        const lower = prompt.toLowerCase();
-        let reply = "I am ready to help you direct the Microfyxd System, but your Gemini API Key is not set in Settings > Secrets. I can perform simple rule-based local routing:";
-        const actions: any[] = [];
-
-        if (lower.includes('cockpit') || lower.includes('telemetry') || lower.includes('home')) {
-          actions.push({ type: 'SET_ACTIVE_TAB', payload: { tab: 'cockpit' } });
-          reply += "\n- Navigating to **Cockpit Control Panel**.";
-        } else if (lower.includes('sandbox') || lower.includes('compile') || lower.includes('diagnostic') || lower.includes('heal') || lower.includes('code')) {
-          actions.push({ type: 'SET_ACTIVE_TAB', payload: { tab: 'sandbox' } });
-          reply += "\n- Navigating to **Code Sandbox**.";
-        } else if (lower.includes('memory') || lower.includes('memories')) {
-          actions.push({ type: 'SET_ACTIVE_TAB', payload: { tab: 'memory' } });
-          reply += "\n- Navigating to **Agent Memories Matrix**.";
-        } else if (lower.includes('doctrine') || lower.includes('compliance')) {
-          actions.push({ type: 'SET_ACTIVE_TAB', payload: { tab: 'doctrine' } });
-          reply += "\n- Navigating to **System Doctrine Guardrails**.";
-        } else if (lower.includes('integration') || lower.includes('vercel') || lower.includes('dns')) {
-          actions.push({ type: 'SET_ACTIVE_TAB', payload: { tab: 'integrations' } });
-          reply += "\n- Navigating to **Vercel/DNS Integrations**.";
-        }
-
-        if (lower.includes('cognition') || lower.includes('sim') || lower.includes('loop')) {
-          actions.push({ type: 'SET_ACTIVE_TAB', payload: { tab: 'integrations' } });
-          actions.push({ type: 'SET_ACTIVE_SUBSECTION', payload: { subSection: 'cognition' } });
-          reply += "\n- Shifting view to **Cognition Simulator**.";
-        }
-
-        if (lower.includes('execute') || lower.includes('run loop') || lower.includes('simulate loop') || lower.includes('loop execution')) {
-          const outcome = lower.includes('fail') ? 'failure' : lower.includes('violation') ? 'violation' : 'success';
-          actions.push({ type: 'EXECUTE_COGNITION_LOOP', payload: { outcome } });
-          reply += `\n- Initiating cognition loop execution simulation with outcome: **${outcome}**.`;
-        }
-
-        if (actions.length === 0) {
-          reply += "\n- *Awaiting a direct instruction to shift views or trigger simulation loops. Try: 'Navigate to sandbox' or 'Execute cognition loop'.*";
-        }
-
-        return res.json({ success: true, reply, actions });
+        const fallback = getRuleBasedFallback(prompt, false);
+        return res.json({ success: true, ...fallback });
       }
 
       // We have AI client! Prepare structured generation parameters
@@ -526,13 +558,14 @@ Your task is to help the operator direct the UI and the system via conversation.
 You can generate conversational text responses AND dispatch real-time actions to update state and execute routines.
 
 Available UI/system actions:
-- SET_ACTIVE_TAB: Navigates to a specific tab. Payload: { tab: 'cockpit'|'traces'|'files'|'phenotype'|'ego'|'infra'|'sandbox'|'memory'|'doctrine'|'workspace'|'integrations' }
+- SET_ACTIVE_TAB: Navigates to a specific tab. Payload: { tab: 'cockpit'|'traces'|'files'|'phenotype'|'ego'|'infra'|'sandbox'|'memory'|'doctrine'|'workspace'|'integrations'|'quantum_tuning' }
 - SET_ACTIVE_SUBSECTION: Inside the 'integrations' tab, sets the sub-section. Payload: { subSection: 'injections'|'namecheap'|'vercel'|'cognition' }
 - EXECUTE_COGNITION_LOOP: Triggers closed-loop STDP neuromorphic adaptation simulation step. Payload: { outcome: 'success'|'failure'|'violation' }
 - ADD_COGNITIVE_GOAL: Inserts a new synthetic system goal. Payload: { description: string, priority: number (1-10), constraints: string }
 - ADD_COGNITIVE_TASK: Adds a task to the queue. Payload: { source: string, priority: number, assignedGoal: string }
 - ADD_MEMORY: Inserts a key-value record into the neural memory matrix. Payload: { key: string, value: string, memoryType: 'episodic'|'semantic'|'working', confidence: number }
 - TOGGLE_SAFETY_OVERRIDE: Changes system safety watchdog override state. Payload: { engaged: boolean }
+- TRIGGER_QUANTUM_TUNING: Initiates an advanced quantum bio-neural resonance calibration sweep. Payload: {}
 
 Strictly analyze the user prompt and generate relevant actions to match their intent. If they just want to chat or ask informational questions, return an empty actions array. Be concise, intelligent, and highly capable.
 `;
@@ -566,7 +599,7 @@ Strictly analyze the user prompt and generate relevant actions to match their in
               properties: {
                 type: {
                   type: Type.STRING,
-                  description: "SET_ACTIVE_TAB, SET_ACTIVE_SUBSECTION, EXECUTE_COGNITION_LOOP, ADD_COGNITIVE_GOAL, ADD_COGNITIVE_TASK, ADD_MEMORY, TOGGLE_SAFETY_OVERRIDE"
+                  description: "SET_ACTIVE_TAB, SET_ACTIVE_SUBSECTION, EXECUTE_COGNITION_LOOP, ADD_COGNITIVE_GOAL, ADD_COGNITIVE_TASK, ADD_MEMORY, TOGGLE_SAFETY_OVERRIDE, TRIGGER_QUANTUM_TUNING"
                 },
                 payload: {
                   type: Type.OBJECT,
@@ -580,32 +613,53 @@ Strictly analyze the user prompt and generate relevant actions to match their in
         required: ["reply"]
       };
 
-      const response = await ai.models.generateContent({
-        model: 'gemini-3.5-flash',
-        contents,
-        config: {
-          systemInstruction,
-          responseMimeType: 'application/json',
-          responseSchema
+      try {
+        let response;
+        let retries = 1; // 1 retry attempt
+        while (retries >= 0) {
+          try {
+            response = await ai.models.generateContent({
+              model: 'gemini-3.5-flash',
+              contents,
+              config: {
+                systemInstruction,
+                responseMimeType: 'application/json',
+                responseSchema
+              }
+            });
+            break;
+          } catch (apiErr: any) {
+            console.warn(`[GEMINI CHAT API ATTEMPT FAILED] Retries left: ${retries}. Error:`, apiErr);
+            if (retries === 0) {
+              throw apiErr;
+            }
+            retries--;
+            await new Promise(resolve => setTimeout(resolve, 800));
+          }
         }
-      });
 
-      if (response.text) {
-        const parsed = JSON.parse(response.text.trim());
-        return res.json({
-          success: true,
-          reply: parsed.reply,
-          actions: parsed.actions || []
-        });
-      } else {
-        throw new Error("No response text received from the model.");
+        if (response && response.text) {
+          const parsed = JSON.parse(response.text.trim());
+          return res.json({
+            success: true,
+            reply: parsed.reply,
+            actions: parsed.actions || []
+          });
+        } else {
+          throw new Error("No response text received from the model.");
+        }
+      } catch (geminiCallError: any) {
+        console.error('[GEMINI CHAT CALL ERROR - ENGAGING FALLBACK]', geminiCallError);
+        const fallback = getRuleBasedFallback(prompt, true);
+        return res.json({ success: true, ...fallback });
       }
 
     } catch (err: any) {
-      console.error('[API CHAT ERROR]', err);
-      res.status(500).json({
-        success: false,
-        error: err.message || String(err)
+      console.error('[API CHAT OUTER ERROR]', err);
+      const fallback = getRuleBasedFallback(prompt, true);
+      res.json({
+        success: true,
+        ...fallback
       });
     }
   });
@@ -1117,6 +1171,11 @@ Strictly analyze the user prompt and generate relevant actions to match their in
     } catch (err: any) {
       res.status(500).json({ success: false, error: err.message });
     }
+  });
+
+  // Handle 404 for unmatched API routes
+  app.all('/api/*', (req, res) => {
+    res.status(404).json({ success: false, error: `API route not found: ${req.method} ${req.url}` });
   });
 
   // Vite development middleware vs Static serving

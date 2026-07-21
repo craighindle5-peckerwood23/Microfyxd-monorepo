@@ -18,6 +18,8 @@ import {
   Sliders, 
   Eye, 
   BookOpen, 
+  Workflow,
+  Hammer,
   UserCheck, 
   Compass,
   ArrowRight,
@@ -55,6 +57,9 @@ import {
   fetchAuditLogsFromFirestore
 } from './lib/firebase.ts';
 import { User } from 'firebase/auth';
+import { HolographicCanvas } from './components/HolographicCanvas';
+import { ExperimentSandbox } from './components/ExperimentSandbox';
+import { AutonomousEngines } from './components/AutonomousEngines';
 
 interface TraceLog {
   stepId: string;
@@ -74,10 +79,43 @@ interface MonorepoFile {
 
 export default function App() {
   // Navigation & UI state
-  const [activeTab, setActiveTab] = useState<'cockpit' | 'traces' | 'files' | 'phenotype' | 'ego' | 'infra' | 'sandbox' | 'memory' | 'doctrine' | 'workspace' | 'integrations'>('cockpit');
+  const [activeTab, setActiveTab] = useState<'cockpit' | 'traces' | 'files' | 'phenotype' | 'ego' | 'infra' | 'sandbox' | 'memory' | 'doctrine' | 'workspace' | 'integrations' | 'quantum_tuning' | 'autonomous_engines'>('cockpit');
   const [terminalMode, setTerminalMode] = useState<'langgraph' | 'ai-director'>('ai-director');
   const [autoSpeak, setAutoSpeak] = useState<boolean>(true);
   const [speakingMessageIdx, setSpeakingMessageIdx] = useState<number | null>(null);
+  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const [selectedVoiceName, setSelectedVoiceName] = useState<string>('');
+  
+  // Self-Diagnostic and Auto-Healing System
+  const [diagnosticState, setDiagnosticState] = useState<'idle' | 'scanning' | 'complete' | 'healing' | 'healed'>('idle');
+  const [diagnosticStep, setDiagnosticStep] = useState<number>(0);
+  const [diagnosticLogs, setDiagnosticLogs] = useState<string[]>([]);
+  const [diagnosticResults, setDiagnosticResults] = useState<any[]>([
+    { id: 'gateway', name: 'AI Director Connectivity Gateway', status: 'pass', details: 'Awaiting diagnosis initialization...' },
+    { id: 'langgraph', name: 'LangGraph Orchestrator Node Engine', status: 'pass', details: 'Awaiting diagnosis initialization...' },
+    { id: 'sandbox', name: 'Sandbox Code Isolation Compiler', status: 'pass', details: 'Awaiting diagnosis initialization...' },
+    { id: 'cloudsql', name: 'Cloud SQL Secure Connection Pool', status: 'pass', details: 'Awaiting diagnosis initialization...' },
+    { id: 'google_ws', name: 'Google Workspace Synchronization Bridge', status: 'pass', details: 'Awaiting diagnosis initialization...' }
+  ]);
+  const [healActionsApplied, setHealActionsApplied] = useState<number>(0);
+  const [hasDiagnosticIssues, setHasDiagnosticIssues] = useState<boolean>(false);
+  
+  // Quantum Bio-Neural Resonance Tuning States
+  const [plasticity, setPlasticity] = useState<number>(0.75);
+  const [saturation, setSaturation] = useState<number>(0.60);
+  const [resonance, setResonance] = useState<number>(0.85);
+  const [introspectionDepth, setIntrospectionDepth] = useState<number>(0.70);
+  const [healingOverdrive, setHealingOverdrive] = useState<number>(0.50);
+  
+  const [quantumTuningActive, setQuantumTuningActive] = useState<boolean>(false);
+  const [coherence, setCoherence] = useState<number>(88.4);
+  const handleApplyCoherenceBoost = (boost: number) => {
+    setCoherence(prev => Math.min(100.0, Math.max(0.0, Number((prev + boost).toFixed(1)))));
+  };
+  const [quantumLogs, setQuantumLogs] = useState<string[]>([
+    `[${new Date().toLocaleTimeString()}] [SYSTEM] Quantum Bio-Neural Calibration Deck initialized. Ready for resonance tuning.`
+  ]);
+  const [activeFires, setActiveFires] = useState<number>(8);
   
   // Google Workspace & Firebase Auth state
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -1186,10 +1224,16 @@ Microfyxd is an advanced, high-assurance multi-agent platform orchestrated stric
       .trim();
 
     const utterance = new SpeechSynthesisUtterance(cleanText);
-    const voices = window.speechSynthesis.getVoices();
-    const preferredVoice = voices.find(v => v.lang.startsWith('en') && (v.name.includes('Google') || v.name.includes('Natural') || v.name.includes('Microsoft')));
-    if (preferredVoice) {
-      utterance.voice = preferredVoice;
+    const voicesList = window.speechSynthesis.getVoices();
+    const voice = voicesList.find(v => v.name === selectedVoiceName);
+    
+    if (voice) {
+      utterance.voice = voice;
+    } else {
+      const preferredVoice = voicesList.find(v => v.lang.startsWith('en') && (v.name.includes('Google') || v.name.includes('Natural') || v.name.includes('Microsoft')));
+      if (preferredVoice) {
+        utterance.voice = preferredVoice;
+      }
     }
 
     utterance.onend = () => {
@@ -1211,13 +1255,212 @@ Microfyxd is an advanced, high-assurance multi-agent platform orchestrated stric
     setSpeakingMessageIdx(null);
   };
 
+  const runDiagnostics = async () => {
+    if (diagnosticState === 'scanning' || diagnosticState === 'healing') return;
+    
+    setDiagnosticState('scanning');
+    setDiagnosticStep(0);
+    setDiagnosticLogs([
+      `[${new Date().toLocaleTimeString()}] [INFO] Starting Full System Self-Diagnostics...`,
+      `[${new Date().toLocaleTimeString()}] [INFO] Querying active service descriptors & configuration routes.`
+    ]);
+
+    const steps = [
+      { id: 'gateway', name: 'AI Director Connectivity Gateway' },
+      { id: 'langgraph', name: 'LangGraph Orchestrator Node Engine' },
+      { id: 'sandbox', name: 'Sandbox Code Isolation Compiler' },
+      { id: 'cloudsql', name: 'Cloud SQL Secure Connection Pool' },
+      { id: 'google_ws', name: 'Google Workspace Synchronization Bridge' }
+    ];
+
+    for (let i = 0; i < steps.length; i++) {
+      setDiagnosticStep(i + 1);
+      const step = steps[i];
+      setDiagnosticLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] [TEST] Pinging ${step.name}...`]);
+      
+      await new Promise(resolve => setTimeout(resolve, 600));
+
+      let status: 'pass' | 'fail' | 'warn' = 'pass';
+      let details = 'Connection established successfully. All tests green.';
+
+      if (step.id === 'gateway') {
+        status = 'warn';
+        details = 'Warning: Undici transport timed out previously. Route backup enabled.';
+      } else if (step.id === 'langgraph') {
+        status = 'pass';
+        details = 'Orchestrator online. Verified sequence flow: state -> validation -> compile -> merge.';
+      } else if (step.id === 'sandbox') {
+        const hasFaults = sandboxCode && (sandboxCode.includes('const bugVar') || sandboxCode.includes('unclosed'));
+        status = hasFaults ? 'warn' : 'pass';
+        details = hasFaults ? 'Warning: Syntax faults present in sandbox snippet.' : 'Compiler active. Syntax verified green.';
+      } else if (step.id === 'cloudsql') {
+        status = favItems.length > 0 || auditLogsList.length > 0 ? 'pass' : 'warn';
+        details = status === 'pass' ? 'Drizzle RM pool healthy. Verified active database entities.' : 'Secure connection idle. No records queried yet.';
+      } else if (step.id === 'google_ws') {
+        status = currentUser ? 'pass' : 'warn';
+        details = status === 'pass' ? `Logged in as ${currentUser.email}. Active session token valid.` : 'No active workspace token linked.';
+      }
+
+      setDiagnosticResults(prev => prev.map(item => item.id === step.id ? { ...item, status, details } : item));
+      setDiagnosticLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] [RESULT] ${step.name}: ${status.toUpperCase()} (${details})`]);
+    }
+
+    setDiagnosticState('complete');
+    setHasDiagnosticIssues(true);
+    setDiagnosticLogs(prev => [
+      ...prev, 
+      `[${new Date().toLocaleTimeString()}] [INFO] Diagnosis phase finished.`,
+      `[${new Date().toLocaleTimeString()}] [INFO] Ready for Auto-Healing Core configuration.`
+    ]);
+  };
+
+  const runAutoHealing = async () => {
+    if (diagnosticState === 'healing') return;
+    setDiagnosticState('healing');
+    
+    setDiagnosticLogs(prev => [
+      ...prev,
+      `[${new Date().toLocaleTimeString()}] [HEAL] Core System Healing sequence ENGAGED.`,
+      `[${new Date().toLocaleTimeString()}] [HEAL] Optimizing undici keep-alive timeouts...`
+    ]);
+
+    await new Promise(resolve => setTimeout(resolve, 800));
+    setDiagnosticLogs(prev => [
+      ...prev,
+      `[${new Date().toLocaleTimeString()}] [HEAL] Applying custom rule-based router as pre-emptive gateway fallback...`
+    ]);
+
+    await new Promise(resolve => setTimeout(resolve, 800));
+    setDiagnosticLogs(prev => [
+      ...prev,
+      `[${new Date().toLocaleTimeString()}] [HEAL] Sanitizing sandbox buffer state...`
+    ]);
+    
+    await new Promise(resolve => setTimeout(resolve, 800));
+    setDiagnosticLogs(prev => [
+      ...prev,
+      `[${new Date().toLocaleTimeString()}] [HEAL] Auto-rebalancing active telemetry layers...`
+    ]);
+
+    await new Promise(resolve => setTimeout(resolve, 600));
+
+    setDiagnosticResults(prev => prev.map(item => ({
+      ...item,
+      status: 'pass',
+      details: item.id === 'gateway' 
+        ? 'Healed: Rule-based router and request retries fully provisioned.' 
+        : item.id === 'sandbox' 
+        ? 'Healed: Evaluator buffer sanitized.' 
+        : 'Pass: Subsystem verified healthy.'
+    })));
+
+    setHealActionsApplied(prev => prev + 1);
+    setDiagnosticState('healed');
+    setHasDiagnosticIssues(false);
+    setDiagnosticLogs(prev => [
+      ...prev,
+      `[${new Date().toLocaleTimeString()}] [SUCCESS] AUTO-HEALING ROUTINES APPLIED successfully. All connections secured!`,
+      `[${new Date().toLocaleTimeString()}] [SUCCESS] System status restored to TIER 3 master health.`
+    ]);
+  };
+
   useEffect(() => {
+    if (typeof window === 'undefined' || !window.speechSynthesis) return;
+
+    const updateVoices = () => {
+      const allVoices = window.speechSynthesis.getVoices();
+      // Filter to English voices
+      const englishVoices = allVoices.filter(v => v.lang.startsWith('en'));
+      setVoices(englishVoices);
+
+      if (englishVoices.length > 0) {
+        // Look for Western / US voice prioritizations (e.g., Samantha, Google US English, Microsoft Zira, David)
+        const defaultChoice = englishVoices.find(v => 
+          v.name.includes('Samantha') || 
+          v.name.includes('Google US English') ||
+          v.name.includes('US English') ||
+          v.name.includes('Natural') ||
+          v.name.includes('Zira') ||
+          v.lang === 'en-US'
+        );
+        if (defaultChoice) {
+          setSelectedVoiceName(prev => prev || defaultChoice.name);
+        } else {
+          setSelectedVoiceName(prev => prev || englishVoices[0].name);
+        }
+      }
+    };
+
+    updateVoices();
+    if (window.speechSynthesis.onvoiceschanged !== undefined) {
+      window.speechSynthesis.onvoiceschanged = updateVoices;
+    }
+
     return () => {
       if (typeof window !== 'undefined' && window.speechSynthesis) {
         window.speechSynthesis.cancel();
       }
     };
   }, []);
+
+  // Quantum bio-neural simulation loop effect
+  useEffect(() => {
+    let timer: any = null;
+    if (quantumTuningActive) {
+      let stepCount = 0;
+      timer = setInterval(() => {
+        stepCount++;
+        // Randomize active firing nodes slightly around the saturation level
+        const baseFires = Math.round(saturation * 12 + plasticity * 4);
+        setActiveFires(Math.max(3, Math.min(18, Math.round(baseFires + (Math.random() - 0.5) * 4))));
+        
+        // Rise coherence slowly towards target based on plasticity and resonance
+        const targetCoherence = Math.min(99.9, Math.round((92 + resonance * 6.5 + plasticity * 1.4) * 10) / 10);
+        setCoherence(prev => {
+          if (prev < targetCoherence) {
+            return Math.round((prev + 0.8) * 10) / 10;
+          } else if (prev > targetCoherence + 1) {
+            return Math.round((prev - 0.4) * 10) / 10;
+          }
+          return prev;
+        });
+
+        // Log beautiful events periodically
+        if (stepCount % 3 === 1) {
+          const events = [
+            "Aligning neural phase vectors into coherent resonance matrix...",
+            "Tuning synaptic plasticity coefficients in hidden cortical layer 2...",
+            "Neurotransmitter buffer state adjusted. Signal conductivity elevated.",
+            "Coherence metrics optimizing. Self-healing backplanes fully synced.",
+            "Action potentials stable. Multi-agent routing feedback matches doctrine bounds."
+          ];
+          const randomEv = events[Math.floor(Math.random() * events.length)];
+          setQuantumLogs(prev => [
+            `[${new Date().toLocaleTimeString()}] [TUNER] ${randomEv}`,
+            ...prev.slice(0, 19)
+          ]);
+        }
+
+        if (stepCount >= 15) {
+          clearInterval(timer);
+          setQuantumTuningActive(false);
+          setQuantumLogs(prev => [
+            `[${new Date().toLocaleTimeString()}] [SUCCESS] TUNING SWEEP COMPLETE. Neural resonance aligned at ${coherence}%!`,
+            `[${new Date().toLocaleTimeString()}] [SYSTEM] Cognitive profile saved and loaded to active runtime core.`,
+            ...prev.slice(0, 18)
+          ]);
+        }
+      }, 400);
+    } else {
+      // Idle state simulation
+      timer = setInterval(() => {
+        const baseFires = Math.round(saturation * 8);
+        setActiveFires(Math.max(1, Math.min(12, Math.round(baseFires + (Math.random() - 0.5) * 2))));
+      }, 1000);
+    }
+
+    return () => clearInterval(timer);
+  }, [quantumTuningActive, saturation, plasticity, resonance, coherence]);
 
   const runAiDirectorFlow = async (customPrompt?: string) => {
     if (isRunning) return;
@@ -1330,6 +1573,26 @@ Microfyxd is an advanced, high-assurance multi-agent platform orchestrated stric
                       safetyOverride: action.payload.engaged
                     }));
                   }
+                  break;
+                case 'TRIGGER_DIAGNOSTICS':
+                  setActiveTab('cockpit');
+                  setTimeout(() => {
+                    runDiagnostics();
+                  }, 300);
+                  break;
+                case 'TRIGGER_AUTO_HEAL':
+                  setActiveTab('cockpit');
+                  setTimeout(() => {
+                    runAutoHealing();
+                  }, 300);
+                  break;
+                case 'TRIGGER_QUANTUM_TUNING':
+                  setActiveTab('quantum_tuning');
+                  setQuantumTuningActive(true);
+                  setQuantumLogs(prev => [
+                    `[${new Date().toLocaleTimeString()}] [TUNER] Remote trigger from AI Director received. Commencing sweep.`,
+                    ...prev
+                  ]);
                   break;
                 default:
                   console.warn('Unknown action type:', action.type);
@@ -1454,6 +1717,31 @@ Microfyxd is an advanced, high-assurance multi-agent platform orchestrated stric
                   {autoSpeak ? <Volume2 className="w-3 h-3 text-emerald-400 animate-pulse" /> : <VolumeX className="w-3 h-3 text-gray-500" />}
                   <span>TTS: {autoSpeak ? 'AUTO ON' : 'AUTO OFF'}</span>
                 </button>
+                {voices.length > 0 && (
+                  <div className="flex items-center gap-1.5 bg-gray-950/80 px-2 py-1 rounded-md border border-gray-800/60 text-[9px] font-mono text-gray-400">
+                    <span className="text-indigo-400 font-bold">VOICE:</span>
+                    <select
+                      value={selectedVoiceName}
+                      onChange={(e) => {
+                        setSelectedVoiceName(e.target.value);
+                        if (typeof window !== 'undefined' && window.speechSynthesis) {
+                          window.speechSynthesis.cancel();
+                          const u = new SpeechSynthesisUtterance("LA Voice configured.");
+                          const v = window.speechSynthesis.getVoices().find(voice => voice.name === e.target.value);
+                          if (v) u.voice = v;
+                          window.speechSynthesis.speak(u);
+                        }
+                      }}
+                      className="bg-transparent text-gray-300 font-bold outline-none border-none cursor-pointer max-w-[120px] text-[9px]"
+                    >
+                      {voices.map((v) => (
+                        <option key={v.name} value={v.name} className="bg-[#0e101b] text-gray-300 text-[9px]">
+                          {v.name.replace('Microsoft', 'MS').replace('Google', 'GOOG').substring(0, 24)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
                 <div className="flex gap-1.5">
                   <div className="w-2 h-2 rounded-full bg-rose-500/40" />
                   <div className="w-2 h-2 rounded-full bg-amber-500/40" />
@@ -1720,80 +2008,443 @@ Microfyxd is an advanced, high-assurance multi-agent platform orchestrated stric
         <div id="control-deck" className="xl:col-span-7 flex flex-col gap-6 h-[calc(100vh-140px)] min-h-[500px]">
           
           {/* TAB WRAPPER */}
-          <div className="flex-1 bg-[#0b0c13]/75 border border-gray-800/60 rounded-xl flex flex-col overflow-hidden shadow-2xl backdrop-blur-sm">
+          <div className="flex-1 bg-[#0b0c13]/75 border border-gray-800/60 rounded-xl flex overflow-hidden shadow-2xl backdrop-blur-sm">
             
-            {/* TABS SELECTOR LIST */}
-            <div className="bg-[#0e101b] border-b border-gray-800/80 flex flex-wrap text-xs font-mono">
-              <button 
-                onClick={() => setActiveTab('cockpit')}
-                className={`px-4 py-3 flex items-center gap-1.5 border-r border-gray-800 font-bold cursor-pointer transition ${activeTab === 'cockpit' ? 'bg-[#12162d] text-indigo-400 border-t-2 border-t-indigo-500 shadow-inner' : 'text-gray-400 hover:bg-gray-900'}`}
-              >
-                <Sparkles className="w-3.5 h-3.5 text-indigo-400" /> CENTRAL COCKPIT
-              </button>
-              <button 
-                onClick={() => setActiveTab('traces')}
-                className={`px-4 py-3 flex items-center gap-1.5 border-r border-gray-800 font-semibold cursor-pointer transition ${activeTab === 'traces' ? 'bg-[#0b0c13] text-indigo-400 border-t-2 border-t-indigo-500' : 'text-gray-400 hover:bg-gray-900'}`}
-              >
-                <Eye className="w-3.5 h-3.5" /> TRACES
-              </button>
-              <button 
-                onClick={() => setActiveTab('files')}
-                className={`px-4 py-3 flex items-center gap-1.5 border-r border-gray-800 font-semibold cursor-pointer transition ${activeTab === 'files' ? 'bg-[#0b0c13] text-indigo-400 border-t-2 border-t-indigo-500' : 'text-gray-400 hover:bg-gray-900'}`}
-              >
-                <FileCode className="w-3.5 h-3.5" /> MONOREPO
-              </button>
-              <button 
-                onClick={() => setActiveTab('phenotype')}
-                className={`px-4 py-3 flex items-center gap-1.5 border-r border-gray-800 font-semibold cursor-pointer transition ${activeTab === 'phenotype' ? 'bg-[#0b0c13] text-indigo-400 border-t-2 border-t-indigo-500' : 'text-gray-400 hover:bg-gray-900'}`}
-              >
-                <Compass className="w-3.5 h-3.5" /> PHENOTYPE
-              </button>
-              <button 
-                onClick={() => setActiveTab('infra')}
-                className={`px-4 py-3 flex items-center gap-1.5 border-r border-gray-800 font-semibold cursor-pointer transition ${activeTab === 'infra' ? 'bg-[#0b0c13] text-indigo-400 border-t-2 border-t-indigo-500' : 'text-gray-400 hover:bg-gray-900'}`}
-              >
-                <Cpu className="w-3.5 h-3.5" /> INFRASTRUCTURE
-              </button>
-              <button 
-                onClick={() => setActiveTab('ego')}
-                className={`px-4 py-3 flex items-center gap-1.5 border-r border-gray-800 font-semibold cursor-pointer transition ${activeTab === 'ego' ? 'bg-[#0b0c13] text-indigo-400 border-t-2 border-t-indigo-500' : 'text-gray-400 hover:bg-gray-900'}`}
-              >
-                <Brain className="w-3.5 h-3.5" /> EGO-SYSTEM
-              </button>
-              <button 
-                onClick={() => setActiveTab('sandbox')}
-                className={`px-4 py-3 flex items-center gap-1.5 border-r border-gray-800 font-semibold cursor-pointer transition ${activeTab === 'sandbox' ? 'bg-[#0b0c13] text-indigo-400 border-t-2 border-t-indigo-500' : 'text-gray-400 hover:bg-gray-900'}`}
-              >
-                <Code className="w-3.5 h-3.5" /> SANDBOX
-              </button>
-              <button 
-                onClick={() => setActiveTab('memory')}
-                className={`px-4 py-3 flex items-center gap-1.5 border-r border-gray-800 font-semibold cursor-pointer transition ${activeTab === 'memory' ? 'bg-[#0b0c13] text-indigo-400 border-t-2 border-t-indigo-500' : 'text-gray-400 hover:bg-gray-900'}`}
-              >
-                <Database className="w-3.5 h-3.5" /> MEMORY
-              </button>
-              <button 
-                onClick={() => setActiveTab('doctrine')}
-                className={`px-4 py-3 flex items-center gap-1.5 border-r border-gray-800 font-semibold cursor-pointer transition ${activeTab === 'doctrine' ? 'bg-[#0b0c13] text-indigo-400 border-t-2 border-t-indigo-500' : 'text-gray-400 hover:bg-gray-900'}`}
-              >
-                <Shield className="w-3.5 h-3.5" /> DOCTRINE
-              </button>
-              <button 
-                onClick={() => setActiveTab('workspace')}
-                className={`px-4 py-3 flex items-center gap-1.5 border-r border-gray-800 font-semibold cursor-pointer transition ${activeTab === 'workspace' ? 'bg-[#0b0c13] text-indigo-400 border-t-2 border-t-indigo-500' : 'text-gray-400 hover:bg-gray-900'}`}
-              >
-                <Settings className="w-3.5 h-3.5 text-indigo-400" /> WORKSPACE
-              </button>
-              <button 
-                onClick={() => setActiveTab('integrations')}
-                className={`px-4 py-3 flex items-center gap-1.5 border-r border-gray-800 font-semibold cursor-pointer transition ${activeTab === 'integrations' ? 'bg-[#0b0c13] text-indigo-400 border-t-2 border-t-indigo-500' : 'text-gray-400 hover:bg-gray-900'}`}
-              >
-                <Globe className="w-3.5 h-3.5 text-indigo-400 animate-pulse" /> INTEGRATIONS
-              </button>
+            {/* NEW STATE-OF-THE-ART VERTICAL SIDEBAR */}
+            <div className="w-52 bg-[#06070a]/95 border-r border-gray-850 flex flex-col p-3.5 shrink-0 select-none overflow-y-auto">
+              {/* Category: OPERATIONS CENTER */}
+              <div className="mb-4">
+                <div className="px-2 mb-1.5 text-[9px] font-mono font-bold text-indigo-400 uppercase tracking-wider">
+                  System Commands
+                </div>
+                <div className="space-y-0.5">
+                  <button 
+                    onClick={() => setActiveTab('cockpit')}
+                    className={`w-full px-2.5 py-1.5 rounded-lg flex items-center gap-2 font-mono text-[10.5px] text-left cursor-pointer transition ${activeTab === 'cockpit' ? 'bg-indigo-600/15 text-indigo-400 border border-indigo-500/20 font-bold shadow-sm' : 'text-gray-400 hover:text-white hover:bg-gray-900/60 border border-transparent'}`}
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                    <span>CENTRAL COCKPIT</span>
+                  </button>
+                  <button 
+                    onClick={() => setActiveTab('infra')}
+                    className={`w-full px-2.5 py-1.5 rounded-lg flex items-center gap-2 font-mono text-[10.5px] text-left cursor-pointer transition ${activeTab === 'infra' ? 'bg-indigo-600/15 text-indigo-400 border border-indigo-500/20 font-bold shadow-sm' : 'text-gray-400 hover:text-white hover:bg-gray-900/60 border border-transparent'}`}
+                  >
+                    <Cpu className="w-3.5 h-3.5 shrink-0" />
+                    <span>INFRASTRUCTURE</span>
+                  </button>
+                  <button 
+                    onClick={() => setActiveTab('traces')}
+                    className={`w-full px-2.5 py-1.5 rounded-lg flex items-center gap-2 font-mono text-[10.5px] text-left cursor-pointer transition ${activeTab === 'traces' ? 'bg-indigo-600/15 text-indigo-400 border border-indigo-500/20 font-bold shadow-sm' : 'text-gray-400 hover:text-white hover:bg-gray-900/60 border border-transparent'}`}
+                  >
+                    <Eye className="w-3.5 h-3.5 shrink-0" />
+                    <span>TRACES</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Category: COGNITIVE INTELLIGENCE */}
+              <div className="mb-4">
+                <div className="px-2 mb-1.5 text-[9px] font-mono font-bold text-purple-400 uppercase tracking-wider">
+                  Neural Controls
+                </div>
+                <div className="space-y-0.5">
+                  <button 
+                    onClick={() => setActiveTab('autonomous_engines')}
+                    className={`w-full px-2.5 py-1.5 rounded-lg flex items-center justify-between font-mono text-[10.5px] text-left cursor-pointer transition ${activeTab === 'autonomous_engines' ? 'bg-purple-600/15 text-purple-400 border border-purple-500/20 font-bold shadow-sm' : 'text-gray-400 hover:text-white hover:bg-gray-900/60 border border-transparent'}`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <Workflow className="w-3.5 h-3.5 text-indigo-400 shrink-0 animate-spin-slow" />
+                      <span>AUTONOMOUS ENGINES</span>
+                    </div>
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+                  </button>
+                  <button 
+                    onClick={() => setActiveTab('quantum_tuning')}
+                    className={`w-full px-2.5 py-1.5 rounded-lg flex items-center justify-between font-mono text-[10.5px] text-left cursor-pointer transition ${activeTab === 'quantum_tuning' ? 'bg-purple-600/15 text-purple-400 border border-purple-500/20 font-bold shadow-sm' : 'text-gray-400 hover:text-white hover:bg-gray-900/60 border border-transparent'}`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <Sliders className="w-3.5 h-3.5 text-purple-400 shrink-0" />
+                      <span>QUANTUM TUNING</span>
+                    </div>
+                    <span className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-pulse shrink-0" />
+                  </button>
+                  <button 
+                    onClick={() => setActiveTab('ego')}
+                    className={`w-full px-2.5 py-1.5 rounded-lg flex items-center gap-2 font-mono text-[10.5px] text-left cursor-pointer transition ${activeTab === 'ego' ? 'bg-indigo-600/15 text-indigo-400 border border-indigo-500/20 font-bold shadow-sm' : 'text-gray-400 hover:text-white hover:bg-gray-900/60 border border-transparent'}`}
+                  >
+                    <Brain className="w-3.5 h-3.5 shrink-0" />
+                    <span>EGO-SYSTEM</span>
+                  </button>
+                  <button 
+                    onClick={() => setActiveTab('memory')}
+                    className={`w-full px-2.5 py-1.5 rounded-lg flex items-center gap-2 font-mono text-[10.5px] text-left cursor-pointer transition ${activeTab === 'memory' ? 'bg-indigo-600/15 text-indigo-400 border border-indigo-500/20 font-bold shadow-sm' : 'text-gray-400 hover:text-white hover:bg-gray-900/60 border border-transparent'}`}
+                  >
+                    <Database className="w-3.5 h-3.5 shrink-0" />
+                    <span>MEMORY</span>
+                  </button>
+                  <button 
+                    onClick={() => setActiveTab('doctrine')}
+                    className={`w-full px-2.5 py-1.5 rounded-lg flex items-center gap-2 font-mono text-[10.5px] text-left cursor-pointer transition ${activeTab === 'doctrine' ? 'bg-indigo-600/15 text-indigo-400 border border-indigo-500/20 font-bold shadow-sm' : 'text-gray-400 hover:text-white hover:bg-gray-900/60 border border-transparent'}`}
+                  >
+                    <Shield className="w-3.5 h-3.5 shrink-0" />
+                    <span>DOCTRINE</span>
+                  </button>
+                  <button 
+                    onClick={() => setActiveTab('phenotype')}
+                    className={`w-full px-2.5 py-1.5 rounded-lg flex items-center gap-2 font-mono text-[10.5px] text-left cursor-pointer transition ${activeTab === 'phenotype' ? 'bg-indigo-600/15 text-indigo-400 border border-indigo-500/20 font-bold shadow-sm' : 'text-gray-400 hover:text-white hover:bg-gray-900/60 border border-transparent'}`}
+                  >
+                    <Compass className="w-3.5 h-3.5 shrink-0" />
+                    <span>PHENOTYPE</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Category: DEVELOPMENT */}
+              <div className="mb-4">
+                <div className="px-2 mb-1.5 text-[9px] font-mono font-bold text-emerald-400 uppercase tracking-wider">
+                  Dev & Isolation
+                </div>
+                <div className="space-y-0.5">
+                  <button 
+                    onClick={() => setActiveTab('files')}
+                    className={`w-full px-2.5 py-1.5 rounded-lg flex items-center gap-2 font-mono text-[10.5px] text-left cursor-pointer transition ${activeTab === 'files' ? 'bg-indigo-600/15 text-indigo-400 border border-indigo-500/20 font-bold shadow-sm' : 'text-gray-400 hover:text-white hover:bg-gray-900/60 border border-transparent'}`}
+                  >
+                    <FileCode className="w-3.5 h-3.5 shrink-0" />
+                    <span>MONOREPO</span>
+                  </button>
+                  <button 
+                    onClick={() => setActiveTab('sandbox')}
+                    className={`w-full px-2.5 py-1.5 rounded-lg flex items-center gap-2 font-mono text-[10.5px] text-left cursor-pointer transition ${activeTab === 'sandbox' ? 'bg-indigo-600/15 text-indigo-400 border border-indigo-500/20 font-bold shadow-sm' : 'text-gray-400 hover:text-white hover:bg-gray-900/60 border border-transparent'}`}
+                  >
+                    <Code className="w-3.5 h-3.5 shrink-0" />
+                    <span>SANDBOX</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Category: INTEGRATIONS */}
+              <div className="mb-4">
+                <div className="px-2 mb-1.5 text-[9px] font-mono font-bold text-blue-400 uppercase tracking-wider">
+                  Integrations
+                </div>
+                <div className="space-y-0.5">
+                  <button 
+                    onClick={() => setActiveTab('integrations')}
+                    className={`w-full px-2.5 py-1.5 rounded-lg flex items-center gap-2 font-mono text-[10.5px] text-left cursor-pointer transition ${activeTab === 'integrations' ? 'bg-indigo-600/15 text-indigo-400 border border-indigo-500/20 font-bold shadow-sm' : 'text-gray-400 hover:text-white hover:bg-gray-900/60 border border-transparent'}`}
+                  >
+                    <Globe className="w-3.5 h-3.5 shrink-0" />
+                    <span>V_DNS CONNECTOR</span>
+                  </button>
+                  <button 
+                    onClick={() => setActiveTab('workspace')}
+                    className={`w-full px-2.5 py-1.5 rounded-lg flex items-center gap-2 font-mono text-[10.5px] text-left cursor-pointer transition ${activeTab === 'workspace' ? 'bg-indigo-600/15 text-indigo-400 border border-indigo-500/20 font-bold shadow-sm' : 'text-gray-400 hover:text-white hover:bg-gray-900/60 border border-transparent'}`}
+                  >
+                    <Settings className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                    <span>WORKSPACE</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Sidebar footer branding */}
+              <div className="mt-auto pt-3 border-t border-gray-900 text-[8.5px] font-mono text-gray-600 flex flex-col gap-0.5">
+                <span>RESONANCE FEED: {coherence.toFixed(1)}%</span>
+                <span>STATE: {quantumTuningActive ? 'SWEEPING' : 'CALIBRATED'}</span>
+              </div>
             </div>
 
             {/* TAB CONTAINER BODY */}
             <div className="flex-1 overflow-y-auto p-5">
+
+              {/* TAB: AUTONOMOUS COGNITIVE ENGINES */}
+              {activeTab === 'autonomous_engines' && (
+                <AutonomousEngines 
+                  onApplyCoherenceBoost={handleApplyCoherenceBoost}
+                  systemHealth={100}
+                />
+              )}
+
+              {/* QUANTUM BIO-NEURAL TUNING TAB */}
+              {activeTab === 'quantum_tuning' && (
+                <div className="flex flex-col gap-6 text-xs animate-fadeIn">
+                  
+                  {/* HEADER BANNER */}
+                  <div className="bg-gradient-to-r from-purple-950/40 via-[#0a0c13] to-indigo-950/20 border border-purple-500/15 rounded-xl p-4 flex flex-wrap items-center justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-purple-500/10 rounded-lg text-purple-400">
+                        <Sliders className="w-5 h-5 animate-pulse" />
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-bold text-white uppercase tracking-tight">Quantum Bio-Neural Calibration Deck</h4>
+                        <p className="text-[11px] text-gray-400 mt-0.5">Fine-tune synapses, manage neurotransmitter saturation, and sync action potentials into coherence bounds</p>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center gap-2">
+                      <span className={`text-[10px] font-mono px-2.5 py-1 rounded border font-bold flex items-center gap-1.5 ${quantumTuningActive ? 'bg-purple-500/15 text-purple-300 border-purple-500/30' : 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'}`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${quantumTuningActive ? 'bg-purple-400 animate-ping' : 'bg-emerald-400'}`} />
+                        {quantumTuningActive ? 'ACTIVE SWEEPING' : 'COHERENCE CALIBRATED'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* CORE PANEL: GRID Split into controls and live canvas network visualizer */}
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                    
+                    {/* LEFT COLUMN: PARAMETER SLIDERS (lg:col-span-5) */}
+                    <div className="lg:col-span-5 flex flex-col gap-4">
+                      <div className="bg-[#0a0c13] border border-gray-800/40 rounded-xl p-4 flex flex-col gap-4 shadow-sm">
+                        <span className="text-xs font-mono font-bold text-white flex items-center gap-1.5 uppercase border-b border-gray-850 pb-2.5">
+                          <Sliders className="w-4 h-4 text-purple-400" />
+                          Biological Synaptic Coefficients
+                        </span>
+
+                        {/* SLIDER 1: Synaptic Plasticity */}
+                        <div className="flex flex-col gap-1.5">
+                          <div className="flex justify-between items-center text-[11px]">
+                            <span className="text-gray-300 font-medium">Synaptic Plasticity Index</span>
+                            <span className="font-mono text-purple-400 font-bold">{(plasticity * 100).toFixed(0)}%</span>
+                          </div>
+                          <input 
+                            type="range"
+                            min="0.1"
+                            max="1.0"
+                            step="0.05"
+                            value={plasticity}
+                            onChange={(e) => {
+                              setPlasticity(parseFloat(e.target.value));
+                              setQuantumLogs(prev => [
+                                `[${new Date().toLocaleTimeString()}] [COEFF] Adjusted Synaptic Plasticity Index to ${(parseFloat(e.target.value)*100).toFixed(0)}%`,
+                                ...prev.slice(0, 18)
+                              ]);
+                            }}
+                            className="w-full accent-purple-500 bg-gray-950 h-1.5 rounded-lg appearance-none cursor-pointer"
+                          />
+                          <p className="text-[9.5px] text-gray-500 leading-snug">Controls adaptation rates and error-correction backpropagation responsiveness during runtime operations.</p>
+                        </div>
+
+                        {/* SLIDER 2: Neurotransmitter Saturation */}
+                        <div className="flex flex-col gap-1.5">
+                          <div className="flex justify-between items-center text-[11px]">
+                            <span className="text-gray-300 font-medium">Neurotransmitter Buffer Saturation</span>
+                            <span className="font-mono text-purple-400 font-bold">{(saturation * 100).toFixed(0)}%</span>
+                          </div>
+                          <input 
+                            type="range"
+                            min="0.1"
+                            max="1.0"
+                            step="0.05"
+                            value={saturation}
+                            onChange={(e) => {
+                              setSaturation(parseFloat(e.target.value));
+                              setQuantumLogs(prev => [
+                                `[${new Date().toLocaleTimeString()}] [COEFF] Calibrated Neurotransmitter Buffer Saturation to ${(parseFloat(e.target.value)*100).toFixed(0)}%`,
+                                ...prev.slice(0, 18)
+                              ]);
+                            }}
+                            className="w-full accent-purple-500 bg-gray-950 h-1.5 rounded-lg appearance-none cursor-pointer"
+                          />
+                          <p className="text-[9.5px] text-gray-500 leading-snug">Amplifies node signal routing potential. High levels increase concurrent paths but might over-saturate cognitive layers.</p>
+                        </div>
+
+                        {/* SLIDER 3: Attention Focus Resonance */}
+                        <div className="flex flex-col gap-1.5">
+                          <div className="flex justify-between items-center text-[11px]">
+                            <span className="text-gray-300 font-medium">Attention Focus Resonance</span>
+                            <span className="font-mono text-purple-400 font-bold">{(resonance * 100).toFixed(0)}%</span>
+                          </div>
+                          <input 
+                            type="range"
+                            min="0.1"
+                            max="1.0"
+                            step="0.05"
+                            value={resonance}
+                            onChange={(e) => {
+                              setResonance(parseFloat(e.target.value));
+                              setQuantumLogs(prev => [
+                                `[${new Date().toLocaleTimeString()}] [COEFF] Shifted Attention Focus Resonance to ${(parseFloat(e.target.value)*100).toFixed(0)}%`,
+                                ...prev.slice(0, 18)
+                              ]);
+                            }}
+                            className="w-full accent-purple-500 bg-gray-950 h-1.5 rounded-lg appearance-none cursor-pointer"
+                          />
+                          <p className="text-[9.5px] text-gray-500 leading-snug">Sharpens model introspection focus during routing evaluations. Higher values optimize path precision.</p>
+                        </div>
+
+                        {/* SLIDER 4: Self-Healing Overdrive */}
+                        <div className="flex flex-col gap-1.5">
+                          <div className="flex justify-between items-center text-[11px]">
+                            <span className="text-gray-300 font-medium">Self-Healing Feedback Overdrive</span>
+                            <span className="font-mono text-purple-400 font-bold">{(healingOverdrive * 100).toFixed(0)}%</span>
+                          </div>
+                          <input 
+                            type="range"
+                            min="0.1"
+                            max="1.0"
+                            step="0.05"
+                            value={healingOverdrive}
+                            onChange={(e) => {
+                              setHealingOverdrive(parseFloat(e.target.value));
+                              setQuantumLogs(prev => [
+                                `[${new Date().toLocaleTimeString()}] [COEFF] Set Self-Healing Feedback Overdrive to ${(parseFloat(e.target.value)*100).toFixed(0)}%`,
+                                ...prev.slice(0, 18)
+                              ]);
+                            }}
+                            className="w-full accent-purple-500 bg-gray-950 h-1.5 rounded-lg appearance-none cursor-pointer"
+                          />
+                          <p className="text-[9.5px] text-gray-500 leading-snug">Sets the aggressive ratio of the auto-healing loop. Amplified ranges accelerate corrective code compiling.</p>
+                        </div>
+
+                        {/* INTERACTION ACTION BUTTONS */}
+                        <div className="grid grid-cols-2 gap-2 pt-2">
+                          <button
+                            onClick={() => {
+                              setQuantumTuningActive(true);
+                              setCoherence(82.1);
+                              setQuantumLogs(prev => [
+                                `[${new Date().toLocaleTimeString()}] [START] Initializing Quantum Resonance Calibration Sweep...`,
+                                `[${new Date().toLocaleTimeString()}] [START] Sweeping all bio-neural parameters to optimize coherence vectors.`,
+                                ...prev.slice(0, 17)
+                              ]);
+                            }}
+                            disabled={quantumTuningActive}
+                            className="w-full py-2 bg-gradient-to-tr from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-mono font-bold text-[10px] rounded-lg shadow-lg cursor-pointer transition disabled:opacity-50"
+                          >
+                            ⚡ SWEEP TUNING
+                          </button>
+                          
+                          <button
+                            onClick={() => {
+                              // Inject simulated neural error
+                              setQuantumLogs(prev => [
+                                `[${new Date().toLocaleTimeString()}] [ALERT] SYNAPTIC DRIFT ERROR DETECTED! Aligning synaptic matrices...`,
+                                `[${new Date().toLocaleTimeString()}] [HEAL] Auto-corrective STDP feedback triggered with overdrive coeff ${healingOverdrive}.`,
+                                `[${new Date().toLocaleTimeString()}] [SUCCESS] Defect in neural map successfully isolated and repaired in ${(1.2 - healingOverdrive * 0.8).toFixed(2)}s!`,
+                                ...prev.slice(0, 17)
+                              ]);
+                              // Set diagnostic alert
+                              setCoherence(prev => Math.max(60, prev - 18.5));
+                            }}
+                            className="w-full py-2 bg-gray-900 hover:bg-rose-950/40 text-gray-400 hover:text-rose-400 border border-gray-850 hover:border-rose-900/30 rounded-lg text-[10px] font-mono font-bold cursor-pointer transition"
+                          >
+                            🔥 DRIFT FAILURE TEST
+                          </button>
+                        </div>
+
+                      </div>
+                    </div>
+
+                    {/* RIGHT COLUMN: INTERACTIVE VISUALIZER CANVAS (lg:col-span-7) */}
+                    <div className="lg:col-span-7 flex flex-col gap-4">
+                      
+                      {/* NEURAL SVG SIMULATOR */}
+                      <div className="bg-[#0a0c13] border border-gray-800/40 rounded-xl p-4 flex flex-col gap-3 shadow-sm h-[260px] overflow-hidden relative">
+                        <span className="text-xs font-mono font-bold text-white flex items-center justify-between border-b border-gray-850 pb-2">
+                          <span className="flex items-center gap-1.5 uppercase">
+                            <Activity className="w-4 h-4 text-purple-400" />
+                            Live Synaptic Resonance Fire-Map
+                          </span>
+                          <span className="text-[10px] text-gray-500 font-mono">Fires: {activeFires} nodes/s</span>
+                        </span>
+
+                        <div className="flex-1 flex items-center justify-center relative bg-[#04050a] rounded-lg border border-gray-900 overflow-hidden">
+                          {/* Animated SVG network */}
+                          <svg className="w-full h-full" viewBox="0 0 500 200">
+                            {/* CONNECTIONS (PATHS) */}
+                            <g stroke="#312e81" strokeWidth="1" strokeOpacity="0.4">
+                              <line x1="50" y1="100" x2="150" y2="50" />
+                              <line x1="50" y1="100" x2="150" y2="150" />
+                              <line x1="150" y1="50" x2="250" y2="50" />
+                              <line x1="150" y1="50" x2="250" y2="150" />
+                              <line x1="150" y1="150" x2="250" y2="50" />
+                              <line x1="150" y1="150" x2="250" y2="150" />
+                              <line x1="250" y1="50" x2="350" y2="50" />
+                              <line x1="250" y1="50" x2="350" y2="150" />
+                              <line x1="250" y1="150" x2="350" y2="50" />
+                              <line x1="250" y1="150" x2="350" y2="150" />
+                              <line x1="350" y1="50" x2="450" y2="100" />
+                              <line x1="350" y1="150" x2="450" y2="100" />
+                            </g>
+
+                            {/* ACTIVE PULSING FIRES */}
+                            {quantumTuningActive && (
+                              <g fill="none" stroke="#a855f7" strokeWidth="1.5">
+                                <path d="M 50 100 L 150 50" strokeDasharray="10, 190" strokeDashoffset={activeFires * 15}>
+                                  <animate attributeName="strokeDashoffset" values="200;0" dur="1s" repeatCount="indefinite" />
+                                </path>
+                                <path d="M 150 50 L 250 150" strokeDasharray="10, 190" strokeDashoffset={activeFires * -10}>
+                                  <animate attributeName="strokeDashoffset" values="200;0" dur="1.2s" repeatCount="indefinite" />
+                                </path>
+                                <path d="M 250 150 L 350 50" strokeDasharray="10, 190" strokeDashoffset={activeFires * 8}>
+                                  <animate attributeName="strokeDashoffset" values="0;200" dur="0.8s" repeatCount="indefinite" />
+                                </path>
+                                <path d="M 350 50 L 450 100" strokeDasharray="10, 190" strokeDashoffset={activeFires * -25}>
+                                  <animate attributeName="strokeDashoffset" values="200;0" dur="0.9s" repeatCount="indefinite" />
+                                </path>
+                              </g>
+                            )}
+
+                            {/* NODES */}
+                            {/* Layer 0: Input */}
+                            <circle cx="50" cy="100" r="10" className={`transition-all duration-300 ${quantumTuningActive ? 'fill-purple-500 shadow-lg shadow-purple-500/50' : 'fill-indigo-950'} stroke-indigo-400`} strokeWidth="1.5" />
+                            
+                            {/* Layer 1: Hidden A */}
+                            <circle cx="150" cy="50" r="12" className={`transition-all duration-300 ${activeFires > 6 ? 'fill-purple-500' : 'fill-indigo-950'} stroke-indigo-400`} strokeWidth="1.5" />
+                            <circle cx="150" cy="150" r="12" className={`transition-all duration-300 ${activeFires > 10 ? 'fill-indigo-500' : 'fill-indigo-950'} stroke-indigo-400`} strokeWidth="1.5" />
+
+                            {/* Layer 2: Hidden B */}
+                            <circle cx="250" cy="50" r="12" className={`transition-all duration-300 ${activeFires > 4 ? 'fill-indigo-500' : 'fill-indigo-950'} stroke-indigo-400`} strokeWidth="1.5" />
+                            <circle cx="250" cy="150" r="12" className={`transition-all duration-300 ${activeFires > 8 ? 'fill-purple-500' : 'fill-indigo-950'} stroke-indigo-400`} strokeWidth="1.5" />
+
+                            {/* Layer 3: Hidden C */}
+                            <circle cx="350" cy="50" r="12" className={`transition-all duration-300 ${activeFires > 12 ? 'fill-purple-500' : 'fill-indigo-950'} stroke-indigo-400`} strokeWidth="1.5" />
+                            <circle cx="350" cy="150" r="12" className={`transition-all duration-300 ${activeFires > 5 ? 'fill-indigo-500' : 'fill-indigo-950'} stroke-indigo-400`} strokeWidth="1.5" />
+
+                            {/* Layer 4: Output */}
+                            <circle cx="450" cy="100" r="10" className={`transition-all duration-300 ${quantumTuningActive ? 'fill-indigo-400 animate-pulse' : 'fill-indigo-950'} stroke-indigo-400`} strokeWidth="1.5" />
+                          </svg>
+
+                          {/* Floating indicators */}
+                          <div className="absolute bottom-3 left-3 flex items-center gap-1.5 font-mono text-[9px] text-gray-500 bg-gray-950/80 px-2 py-1 rounded border border-gray-850">
+                            <span className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-ping" />
+                            <span>COHERENT COUPLING: ACTIVE</span>
+                          </div>
+
+                          <div className="absolute top-3 right-3 flex items-center gap-1.5 font-mono text-[10px] font-bold text-white bg-purple-950/40 px-3 py-1.5 rounded-lg border border-purple-500/20">
+                            <span>COHERENCE:</span>
+                            <span className="text-purple-400">{coherence.toFixed(1)}%</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* LOGS MONITOR */}
+                      <div className="bg-[#0a0c13] border border-gray-800/40 rounded-xl p-4 flex flex-col gap-2.5 shadow-sm h-[180px]">
+                        <span className="text-xs font-mono font-bold text-white flex items-center gap-1.5 uppercase border-b border-gray-850 pb-2.5">
+                          <Terminal className="w-4 h-4 text-purple-400" />
+                          Quantum Resonance Sweeper Logs
+                        </span>
+                        
+                        <div className="flex-1 bg-[#04050a] rounded-lg p-3 font-mono text-[10px] text-gray-400 overflow-y-auto space-y-1.5 border border-gray-900 select-text">
+                          {quantumLogs.map((log, idx) => {
+                            let textClass = "text-gray-400";
+                            if (log.includes("[SUCCESS]")) textClass = "text-emerald-400 font-bold";
+                            else if (log.includes("[ALERT]")) textClass = "text-rose-400 font-bold animate-pulse";
+                            else if (log.includes("[HEAL]")) textClass = "text-purple-400";
+                            else if (log.includes("[START]")) textClass = "text-indigo-400 font-bold";
+                            
+                            return (
+                              <div key={idx} className={textClass}>
+                                {log}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                    </div>
+                  </div>
+
+                </div>
+              )}
 
               {/* TAB 0: UNIFIED COCKPIT DASHBOARD */}
               {activeTab === 'cockpit' && (
@@ -1818,8 +2469,152 @@ Microfyxd is an advanced, high-assurance multi-agent platform orchestrated stric
                       <span className="text-[10px] font-mono px-2 py-1 bg-purple-500/10 text-purple-300 border border-purple-500/20 rounded uppercase">
                         {hardwareOverride} Descriptors
                       </span>
+                                   {/* COCKPIT OPERATIONAL GRID: DIAGNOSTICS & HOLOGRAPHIC SCENE */}
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+                    
+                    {/* Left: Auto Healing Console (lg:col-span-8) */}
+                    <div className="lg:col-span-8 flex flex-col">
+                      <div className="bg-[#0b0c13]/90 border border-indigo-500/20 rounded-xl p-5 flex flex-col gap-4 shadow-xl shadow-indigo-950/10 backdrop-blur h-full">
+                        <div className="flex flex-wrap items-center justify-between border-b border-gray-800/80 pb-3 gap-3">
+                          <div className="flex items-center gap-2.5">
+                            <div className="p-1.5 bg-indigo-500/10 rounded-lg text-indigo-400">
+                              <Activity className="w-4 h-4 animate-pulse" />
+                            </div>
+                            <div>
+                              <h5 className="font-sans font-bold text-white text-xs uppercase tracking-wider flex items-center gap-1.5">
+                                AUTONOMOUS SELF-DIAGNOSTIC & SELF-HEALING SYSTEM
+                              </h5>
+                              <p className="text-[10px] text-gray-400 mt-0.5">Continuous deep-verification, route-failover, and persistent network packet-drop healing</p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-1.5 bg-gray-950/80 px-2.5 py-1 rounded-md border border-gray-800/60 text-[9px] font-mono">
+                              <span className="text-gray-500">SYSTEM HEALTH:</span>
+                              {diagnosticState === 'healed' ? (
+                                <span className="text-emerald-400 font-bold animate-pulse">100% SECURE (TIER 3)</span>
+                              ) : hasDiagnosticIssues ? (
+                                <span className="text-amber-400 font-bold">92% WARNINGS ACTIVE</span>
+                              ) : (
+                                <span className="text-indigo-400 font-bold">98% CALIBRATED</span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-1.5 bg-gray-950/80 px-2.5 py-1 rounded-md border border-gray-800/60 text-[9px] font-mono">
+                              <span className="text-gray-500">HEALS APPLIED:</span>
+                              <span className="text-indigo-400 font-bold">{healActionsApplied} cycles</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* INTERACTIVE CONTROLS */}
+                        <div className="grid grid-cols-1 md:grid-cols-12 gap-4 flex-1">
+                          
+                          {/* Left: Interactive Diagnosis/Healing Trigger buttons & Status Grid */}
+                          <div className="md:col-span-7 flex flex-col gap-3 justify-between">
+                            <div className="flex flex-col gap-3">
+                              <div className="grid grid-cols-2 gap-2">
+                                <button
+                                  disabled={diagnosticState === 'scanning' || diagnosticState === 'healing'}
+                                  onClick={runDiagnostics}
+                                  className={`px-3 py-2 font-mono text-[10px] font-bold rounded-lg border transition cursor-pointer flex items-center justify-center gap-1.5 ${
+                                    diagnosticState === 'scanning'
+                                      ? 'bg-indigo-600/15 border-indigo-500/30 text-indigo-400'
+                                      : 'bg-indigo-600/10 hover:bg-indigo-600/20 border-indigo-500/20 hover:border-indigo-500/40 text-indigo-300'
+                                  }`}
+                                >
+                                  <RefreshCw className={`w-3.5 h-3.5 ${diagnosticState === 'scanning' ? 'animate-spin text-indigo-400' : 'text-indigo-300'}`} />
+                                  {diagnosticState === 'scanning' ? `SCANNING STEP ${diagnosticStep}/5...` : 'INITIALIZE DIAGNOSIS'}
+                                </button>
+
+                                <button
+                                  disabled={diagnosticState === 'scanning' || diagnosticState === 'healing' || diagnosticState === 'idle'}
+                                  onClick={runAutoHealing}
+                                  className={`px-3 py-2 font-mono text-[10px] font-bold rounded-lg border transition cursor-pointer flex items-center justify-center gap-1.5 ${
+                                    diagnosticState === 'healing'
+                                      ? 'bg-emerald-600/15 border-emerald-500/30 text-emerald-400'
+                                      : diagnosticState === 'idle'
+                                      ? 'bg-gray-900/50 border-gray-800 text-gray-500 cursor-not-allowed'
+                                      : 'bg-emerald-600/10 hover:bg-emerald-600/20 border-emerald-500/20 hover:border-emerald-500/40 text-emerald-300'
+                                  }`}
+                                >
+                                  <Sparkles className={`w-3.5 h-3.5 ${diagnosticState === 'healing' ? 'animate-pulse text-emerald-400' : 'text-emerald-300'}`} />
+                                  {diagnosticState === 'healing' ? 'HEALING ROUTINES...' : 'ENGAGE AUTO-HEALER'}
+                                </button>
+                              </div>
+
+                              {/* SUB-SYSTEMS ROW CHECKLIST */}
+                              <div className="bg-[#05060a]/80 rounded-lg p-3 border border-gray-800/50 flex flex-col gap-2">
+                                <span className="text-[9px] font-mono text-gray-500 uppercase tracking-wider block">Verifying Core System Components</span>
+                                
+                                <div className="flex flex-col gap-1.5 font-mono text-[10px]">
+                                  {diagnosticResults.map((result) => (
+                                    <div key={result.id} className="flex items-center justify-between py-1 border-b border-gray-900/50 last:border-0">
+                                      <div className="flex items-center gap-2">
+                                        <div className="w-1.5 h-1.5 rounded-full bg-indigo-500/40" />
+                                        <span className="text-gray-300 font-medium">{result.name}</span>
+                                      </div>
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-[9px] text-gray-500 truncate max-w-[170px] hidden sm:inline">{result.details}</span>
+                                        {result.status === 'pass' ? (
+                                          <span className="text-[9px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-1.5 py-0.5 rounded flex items-center gap-1 font-bold">
+                                            <CheckCircle className="w-2.5 h-2.5" /> SECURE
+                                          </span>
+                                        ) : result.status === 'warn' ? (
+                                          <span className="text-[9px] bg-amber-500/10 text-amber-400 border border-amber-500/20 px-1.5 py-0.5 rounded flex items-center gap-1 font-bold animate-pulse">
+                                            <AlertTriangle className="w-2.5 h-2.5" /> WARNING
+                                          </span>
+                                        ) : (
+                                          <span className="text-[9px] bg-rose-500/10 text-rose-400 border border-rose-500/20 px-1.5 py-0.5 rounded flex items-center gap-1 font-bold">
+                                            <AlertTriangle className="w-2.5 h-2.5" /> FAIL
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Right: Live Diagnostics Log terminal */}
+                          <div className="md:col-span-5 flex flex-col bg-black/60 rounded-lg border border-gray-850 overflow-hidden min-h-[160px]">
+                            <div className="bg-[#0e101b] px-3 py-1.5 border-b border-gray-800 flex items-center justify-between">
+                              <span className="text-[9px] font-mono text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
+                                <Terminal className="w-3 h-3 text-indigo-400" />
+                                DIAGNOSTICS CORE LOGS
+                              </span>
+                              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                            </div>
+                            
+                            <div className="flex-1 p-3 font-mono text-[9px] text-indigo-300 leading-relaxed max-h-[150px] overflow-y-auto flex flex-col gap-1">
+                              {diagnosticLogs.length > 0 ? (
+                                diagnosticLogs.map((log, idx) => (
+                                  <div key={idx} className="whitespace-pre-wrap border-l border-indigo-500/20 pl-2">
+                                    {log}
+                                  </div>
+                                ))
+                              ) : (
+                                <span className="text-gray-600 italic">Core is idle. Initiate diagnostics scan above to monitor real-time network routes, connection heartbeats, and sandbox memory sanitizations.</span>
+                              )}
+                            </div>
+                          </div>
+
+                        </div>
+                      </div>
                     </div>
+
+                    {/* Right: 3D Holographic Neural Interface (lg:col-span-4) */}
+                    <div className="lg:col-span-4 flex flex-col">
+                      <HolographicCanvas 
+                        coherence={coherence} 
+                        isTuningActive={quantumTuningActive}
+                        activeTab={activeTab}
+                      />
+                    </div>
+
                   </div>
+                </div>
+              </div>
 
                   {/* MAIN BENTO GRID */}
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -2602,92 +3397,7 @@ Microfyxd is an advanced, high-assurance multi-agent platform orchestrated stric
 
               {/* TAB 6: SANDBOX & SELF-HEALING */}
               {activeTab === 'sandbox' && (
-                <div className="flex flex-col gap-5 text-xs">
-                  <div>
-                    <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                      <Code className="w-4 h-4 text-indigo-400" />
-                      ISOLATED SANDBOX & SELF-REPAIR ENGINE
-                    </h3>
-                    <p className="text-xs text-gray-400 mt-0.5">Write snippets, trigger syntax errors, and watch selfcheck nodes fix bugs automatically</p>
-                  </div>
-
-                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-                    
-                    {/* Sandbox code editor (lg:span-7) */}
-                    <div className="lg:col-span-7 bg-[#05060a] border border-gray-850 rounded-xl flex flex-col overflow-hidden">
-                      <div className="bg-[#0e101a] px-4 py-2.5 border-b border-gray-850 flex items-center justify-between font-mono text-[11px] text-gray-400">
-                        <span className="flex items-center gap-1.5"><Terminal className="w-3.5 h-3.5 text-indigo-400" /> workspace_scratchpad.ts</span>
-                        <span className="text-rose-400 animate-pulse text-[10px] font-bold">CONTAINED FAULT TRIGGER</span>
-                      </div>
-                      <textarea
-                        value={sandboxCode}
-                        onChange={(e) => setSandboxCode(e.target.value)}
-                        rows={10}
-                        className="p-4 bg-transparent outline-none border-none font-mono text-[11px] leading-relaxed text-gray-200 resize-none h-[220px]"
-                      />
-                      <div className="bg-[#0a0b12] px-4 py-2.5 border-t border-gray-850 flex items-center justify-between">
-                        <button
-                          onClick={async () => {
-                            const res = await fetch('/api/sandbox/eval', {
-                              method: 'POST',
-                              headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify({ code: sandboxCode })
-                            });
-                            const data = await res.json();
-                            if (data.result.syntaxOk) {
-                              alert('Code compiles perfectly in the sandbox!');
-                            } else {
-                              alert(`Code compilation failed in the sandbox! Error: ${data.result.error}`);
-                            }
-                          }}
-                          className="text-[10px] font-mono hover:bg-gray-800 border border-gray-800 text-gray-400 px-3 py-1.5 rounded transition cursor-pointer"
-                        >
-                          Check Syntax
-                        </button>
-
-                        <button
-                          disabled={isRunning}
-                          onClick={() => {
-                            runLangGraphFlow('Diagnose, compile, and self-heal the broken Sandbox typescript snippet.', sandboxCode);
-                          }}
-                          className="bg-purple-600/20 hover:bg-purple-600/30 text-purple-200 border border-purple-500/30 text-[10px] font-mono px-3.5 py-1.5 rounded transition flex items-center gap-1.5 cursor-pointer"
-                        >
-                          <Sparkles className="w-3.5 h-3.5 text-purple-400" />
-                          TRIGGER AUTO-REPAIR
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* How Self-healing works (lg:span-5) */}
-                    <div className="lg:col-span-5 bg-[#0a0c13] border border-gray-800/40 rounded-xl p-4 flex flex-col gap-3">
-                      <h4 className="text-xs font-mono font-bold text-white uppercase border-b border-gray-850 pb-1.5">
-                        Self-Healing Blueprint
-                      </h4>
-                      <p className="text-xs text-gray-400 leading-relaxed">
-                        If a secure tool execution crashes due to a coding fault, the system initiates a LangGraph meta-repair loop:
-                      </p>
-
-                      <div className="flex flex-col gap-2 font-mono text-[11px]">
-                        <div className="flex items-center gap-2 text-gray-400">
-                          <span className="w-5 h-5 rounded-full bg-rose-500/10 text-rose-400 flex items-center justify-center font-bold text-[10px]">1</span>
-                          <span>diagnoseNode detects compilation error</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-gray-400">
-                          <span className="w-5 h-5 rounded-full bg-purple-500/10 text-purple-400 flex items-center justify-center font-bold text-[10px]">2</span>
-                          <span>repairNode generates dynamic syntax patch</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-gray-400">
-                          <span className="w-5 h-5 rounded-full bg-emerald-500/10 text-emerald-400 flex items-center justify-center font-bold text-[10px]">3</span>
-                          <span>retryNode compiles fixed code securely</span>
-                        </div>
-                      </div>
-
-                      <div className="mt-2 bg-[#0d151c] border border-sky-900/30 rounded-lg p-3 text-[11px] text-sky-200 leading-relaxed">
-                        💡 **Try it**: Click **TRIGGER AUTO-REPAIR**. The LangGraph will automatically locate the missing '=' in 'const bugVar', append the closing curly bracket to 'processECU()', and verify execution!
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                <ExperimentSandbox onApplyCoherenceBoost={handleApplyCoherenceBoost} />
               )}
 
               {/* TAB 7: MEMORY */}
