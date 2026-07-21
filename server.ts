@@ -438,10 +438,24 @@ Provide a high-quality summary incorporating these points. Don't mention system-
 
 Generate a markdown response:
 `;
-          const response = await ai.models.generateContent({
-            model: 'gemini-3.5-flash',
-            contents: geminiPrompt,
-          });
+          let response;
+          let summarizeRetries = 3;
+          while (summarizeRetries >= 0) {
+            try {
+              response = await ai.models.generateContent({
+                model: 'gemini-2.5-flash',
+                contents: geminiPrompt,
+              });
+              break;
+            } catch (err: any) {
+              console.warn(`[GEMINI ENRICHMENT API ATTEMPT FAILED] Retries left: ${summarizeRetries}. Error:`, err);
+              if (summarizeRetries === 0) {
+                throw err;
+              }
+              summarizeRetries--;
+              await new Promise(resolve => setTimeout(resolve, 1500));
+            }
+          }
 
           if (response.text) {
             // Replace the final message content with the rich AI output
@@ -615,11 +629,11 @@ Strictly analyze the user prompt and generate relevant actions to match their in
 
       try {
         let response;
-        let retries = 1; // 1 retry attempt
+        let retries = 3; // 3 retry attempts
         while (retries >= 0) {
           try {
             response = await ai.models.generateContent({
-              model: 'gemini-3.5-flash',
+              model: 'gemini-2.5-flash',
               contents,
               config: {
                 systemInstruction,
@@ -634,7 +648,7 @@ Strictly analyze the user prompt and generate relevant actions to match their in
               throw apiErr;
             }
             retries--;
-            await new Promise(resolve => setTimeout(resolve, 800));
+            await new Promise(resolve => setTimeout(resolve, 1500));
           }
         }
 
