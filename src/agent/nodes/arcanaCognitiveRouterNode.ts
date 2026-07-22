@@ -1,4 +1,4 @@
-import { llm } from "../llm"; // your ChatOpenAI / LLM wrapper
+import { llm } from "../llmRouter";
 
 /**
  * Arcana Cognitive Router Node

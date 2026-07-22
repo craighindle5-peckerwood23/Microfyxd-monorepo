@@ -17,6 +17,7 @@ import { createInitialState, MicrofyxdState } from './microfyxd/packages/core/in
 import { buildProductionGraph } from './microfyxd/packages/agent/index.ts';
 import { SandboxService } from './microfyxd/packages/sandbox/index.ts';
 import { PhenotypeEngine } from './microfyxd/packages/phenotype/index.ts';
+import { routeLLM } from './src/agent/llmRouter.ts';
 
 async function startServer() {
   const app = express();
@@ -421,10 +422,9 @@ async function startServer() {
       // 4. Run through the graph
       let finalState = await graph.run(state);
 
-      // 5. Enrich with real Gemini intelligence if API key is present
-      if (ai) {
-        try {
-          const geminiPrompt = `
+      // 5. Enrich with multi-provider LLM router
+      try {
+        const geminiPrompt = `
 You are the central multi-agent consensus orchestrator inside Microfyxd.
 The user prompt is: "${prompt}"
 
@@ -438,35 +438,17 @@ Provide a high-quality summary incorporating these points. Don't mention system-
 
 Generate a markdown response:
 `;
-          let response;
-          let summarizeRetries = 3;
-          while (summarizeRetries >= 0) {
-            try {
-              response = await ai.models.generateContent({
-                model: 'gemini-3.5-flash',
-                contents: geminiPrompt,
-              });
-              break;
-            } catch (err: any) {
-              console.warn(`[GEMINI ENRICHMENT API ATTEMPT FAILED] Retries left: ${summarizeRetries}. Error:`, err);
-              if (summarizeRetries === 0) {
-                throw err;
-              }
-              summarizeRetries--;
-              await new Promise(resolve => setTimeout(resolve, 1500));
-            }
+        const { text, provider } = await routeLLM(geminiPrompt);
+        console.log(`[ENRICHMENT] Responded via ${provider}`);
+        if (text) {
+          // Replace the final message content with the rich AI output
+          if (finalState.messages.length > 0 && finalState.messages[finalState.messages.length - 1].role === 'assistant') {
+            finalState.messages[finalState.messages.length - 1].content = text;
           }
-
-          if (response.text) {
-            // Replace the final message content with the rich AI output
-            if (finalState.messages.length > 0 && finalState.messages[finalState.messages.length - 1].role === 'assistant') {
-              finalState.messages[finalState.messages.length - 1].content = response.text;
-            }
-          }
-        } catch (geminiError) {
-          console.error('[GEMINI ENRICHMENT ERROR]', geminiError);
-          // Fall back to pre-defined responses in the nodes
         }
+      } catch (geminiError) {
+        console.error('[ENRICHMENT ROUTER ERROR]', geminiError);
+        // Fall back to pre-defined responses in the nodes
       }
 
       res.json({
