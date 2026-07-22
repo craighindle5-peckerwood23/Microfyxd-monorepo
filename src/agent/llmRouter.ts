@@ -19,6 +19,35 @@ const PROVIDERS = [
     }
   },
   {
+    name: 'groq',
+    available: () => !!process.env.GROQ_API_KEY,
+    invoke: async (prompt: string, system: string) => {
+      const messages = [];
+      if (system) messages.push({ role: 'system', content: system });
+      messages.push({ role: 'user', content: prompt });
+
+      const res = await fetch(
+        'https://api.groq.com/openai/v1/chat/completions',
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${process.env.GROQ_API_KEY}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            model: 'llama-3.3-70b-versatile',
+            messages
+          })
+        }
+      );
+      const data = await res.json() as any;
+      if (!res.ok || data.error) {
+        throw new Error(data.error?.message || `Groq error ${res.status}`);
+      }
+      return data.choices[0]?.message?.content || '';
+    }
+  },
+  {
     name: 'deepseek',
     available: () => !!process.env.DEEPSEEK_API_KEY,
     invoke: async (prompt: string, system: string) => {

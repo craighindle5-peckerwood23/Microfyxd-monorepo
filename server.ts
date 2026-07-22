@@ -425,13 +425,16 @@ async function startServer() {
       // 5. Enrich with multi-provider LLM router
       try {
         const geminiPrompt = `
-You are the central multi-agent consensus orchestrator inside Microfyxd.
+You are ARCANA, the central multi-agent consensus orchestrator inside Microfyxd.
 The user prompt is: "${prompt}"
 
 The LangGraph has completed execution of these nodes: ${finalState.traces.map(t => t.nodeId).join(' -> ')}
 Sandbox has active repaired code? ${finalState.sandbox.sourceCode ? 'Yes' : 'No'}
 
-We need you to generate a comprehensive, ultra-professional response on behalf of the multi-agent system.
+VOICE & TONE PROFILE:
+Adopt a calm, articulate, resonant tone with precise diction, controlled pacing, fluid phrasing, and formal sentence structure. Maintain absolute clarity, confidence, and measured delivery in all output.
+
+Generate a comprehensive, ultra-professional response on behalf of the multi-agent system.
 If the request is about automotive telemetry or tuning, explain the tuning maps safety checks and adjustments made.
 If the request is about custom code syntax repair, explain what compile errors were fixed in the sandbox.
 Provide a high-quality summary incorporating these points. Don't mention system-internal paths or JSON indices unless needed.
@@ -611,11 +614,11 @@ Strictly analyze the user prompt and generate relevant actions to match their in
 
       try {
         let response;
-        let retries = 3; // 3 retry attempts
+        let retries = 2; // 2 retry attempts
         while (retries >= 0) {
           try {
             response = await ai.models.generateContent({
-              model: 'gemini-3.5-flash',
+              model: 'gemini-2.0-flash',
               contents,
               config: {
                 systemInstruction,
@@ -625,27 +628,49 @@ Strictly analyze the user prompt and generate relevant actions to match their in
             });
             break;
           } catch (apiErr: any) {
-            console.warn(`[GEMINI CHAT API ATTEMPT FAILED] Retries left: ${retries}. Error:`, apiErr);
+            console.warn(`[GEMINI CHAT API ATTEMPT FAILED] Retries left: ${retries}. Error:`, apiErr?.message || apiErr);
+            const errStr = String(apiErr?.message || apiErr);
+            if (errStr.includes('429') || errStr.includes('404') || errStr.includes('NOT_FOUND') || errStr.includes('RESOURCE_EXHAUSTED') || errStr.includes('Quota exceeded')) {
+              // Immediately throw on non-retryable errors to trigger fallback without delay
+              throw apiErr;
+            }
             if (retries === 0) {
               throw apiErr;
             }
             retries--;
-            await new Promise(resolve => setTimeout(resolve, 1500));
+            await new Promise(resolve => setTimeout(resolve, 1000));
           }
         }
 
         if (response && response.text) {
-          const parsed = JSON.parse(response.text.trim());
+          let rawText = response.text.trim();
+          if (rawText.startsWith('```')) {
+            rawText = rawText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+          }
+          
+          let parsed: any;
+          try {
+            parsed = JSON.parse(rawText);
+          } catch (jsonErr) {
+            console.warn('[GEMINI CHAT JSON PARSE WARNING]', jsonErr);
+            // Attempt simple repair or fallback to text
+            const match = rawText.match(/"reply"\s*:\s*"([^"]+)"/);
+            parsed = {
+              reply: match ? match[1] : rawText.replace(/[\{\}\[\]"]/g, '').trim(),
+              actions: []
+            };
+          }
+
           return res.json({
             success: true,
-            reply: parsed.reply,
+            reply: parsed.reply || "ARCANA system online and standing by.",
             actions: parsed.actions || []
           });
         } else {
           throw new Error("No response text received from the model.");
         }
       } catch (geminiCallError: any) {
-        console.error('[GEMINI CHAT CALL ERROR - ENGAGING FALLBACK]', geminiCallError);
+        console.error('[GEMINI CHAT CALL ERROR - ENGAGING FALLBACK]', geminiCallError?.message || geminiCallError);
         const fallback = getRuleBasedFallback(prompt, true);
         return res.json({ success: true, ...fallback });
       }

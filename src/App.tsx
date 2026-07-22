@@ -1289,13 +1289,30 @@ Microfyxd is an advanced, high-assurance multi-agent platform orchestrated stric
       .trim();
 
     const utterance = new SpeechSynthesisUtterance(cleanText);
+    // Sophisticated voice profile tuning: controlled pacing & resonant pitch
+    utterance.rate = 0.88;  // Controlled, measured pacing
+    utterance.pitch = 0.93; // Slightly deeper, resonant vocal tone
+
     const voicesList = window.speechSynthesis.getVoices();
     const voice = voicesList.find(v => v.name === selectedVoiceName);
     
     if (voice) {
       utterance.voice = voice;
     } else {
-      const preferredVoice = voicesList.find(v => v.lang.startsWith('en') && (v.name.includes('Google') || v.name.includes('Natural') || v.name.includes('Microsoft')));
+      const preferredVoice = voicesList.find(v => 
+        v.lang.startsWith('en') && (
+          v.name.includes('Google UK English Male') ||
+          v.name.includes('Google UK English Female') ||
+          v.name.includes('Daniel') ||
+          v.name.includes('Arthur') ||
+          v.name.includes('Serena') ||
+          v.name.includes('Natural') ||
+          v.name.includes('Enhanced') ||
+          v.name.includes('Premium') ||
+          v.name.includes('Google') ||
+          v.name.includes('Microsoft')
+        )
+      );
       if (preferredVoice) {
         utterance.voice = preferredVoice;
       }
@@ -1439,13 +1456,20 @@ Microfyxd is an advanced, high-assurance multi-agent platform orchestrated stric
       setVoices(englishVoices);
 
       if (englishVoices.length > 0) {
-        // Look for Western / US voice prioritizations (e.g., Samantha, Google US English, Microsoft Zira, David)
+        // Look for articulate, resonant, sophisticated voice choices
         const defaultChoice = englishVoices.find(v => 
+          v.name.includes('Google UK English Male') ||
+          v.name.includes('Google UK English Female') ||
+          v.name.includes('Daniel') ||
+          v.name.includes('Arthur') ||
+          v.name.includes('Serena') ||
+          v.name.includes('Oliver') ||
+          v.name.includes('Natural') ||
+          v.name.includes('Enhanced') ||
+          v.name.includes('Premium') ||
           v.name.includes('Samantha') || 
           v.name.includes('Google US English') ||
-          v.name.includes('US English') ||
-          v.name.includes('Natural') ||
-          v.name.includes('Zira') ||
+          v.lang === 'en-GB' ||
           v.lang === 'en-US'
         );
         if (defaultChoice) {

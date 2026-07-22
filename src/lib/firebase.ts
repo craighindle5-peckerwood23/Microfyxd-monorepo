@@ -181,7 +181,7 @@ export const fetchAuditLogsFromFirestore = async (userId: string) => {
 
 export const googleAuthProvider = new GoogleAuthProvider();
 
-// Add Workspace scopes for Gmail, Google Drive, and Google Picker
+// Add Workspace scopes for Gmail, Google Drive, Google Picker, and Google Chat
 googleAuthProvider.addScope('https://www.googleapis.com/auth/gmail.readonly');
 googleAuthProvider.addScope('https://www.googleapis.com/auth/gmail.send');
 googleAuthProvider.addScope('https://www.googleapis.com/auth/gmail.modify');
@@ -191,6 +191,11 @@ googleAuthProvider.addScope('https://www.googleapis.com/auth/drive');
 googleAuthProvider.addScope('https://www.googleapis.com/auth/drive.file');
 googleAuthProvider.addScope('https://www.googleapis.com/auth/drive.metadata.readonly');
 googleAuthProvider.addScope('https://www.googleapis.com/auth/drive.readonly');
+googleAuthProvider.addScope('https://www.googleapis.com/auth/chat.spaces.readonly');
+googleAuthProvider.addScope('https://www.googleapis.com/auth/chat.messages.readonly');
+googleAuthProvider.addScope('https://www.googleapis.com/auth/chat.messages.create');
+googleAuthProvider.addScope('https://www.googleapis.com/auth/chat.spaces');
+googleAuthProvider.addScope('https://www.googleapis.com/auth/chat.memberships.readonly');
 
 // Cache the access token in memory.
 let cachedAccessToken: string | null = null;
