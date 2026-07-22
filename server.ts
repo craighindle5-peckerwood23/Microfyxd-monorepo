@@ -14,7 +14,7 @@ import { eq, and, desc } from 'drizzle-orm';
 
 // Relative imports from our monorepo packages in the workspace
 import { createInitialState, MicrofyxdState } from './microfyxd/packages/core/index.ts';
-import { buildProductionGraph } from './microfyxd/packages/agent/index.ts';
+import { buildProductionGraph, MetaCognitiveEngine } from './microfyxd/packages/agent/index.ts';
 import { SandboxService } from './microfyxd/packages/sandbox/index.ts';
 import { PhenotypeEngine } from './microfyxd/packages/phenotype/index.ts';
 import { routeLLM } from './src/agent/llmRouter.ts';
@@ -1127,6 +1127,45 @@ Strictly analyze the user prompt and generate relevant actions to match their in
         synapses: updatedSynapses
       });
 
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // API Route: Meta-Cognitive Audit & Drift Assessment
+  app.post('/api/cognition/meta-audit', async (req, res) => {
+    try {
+      const { prompt } = req.body;
+      const initialState = createInitialState(prompt || 'Meta-cognitive audit request');
+      const auditResult = MetaCognitiveEngine.auditState(initialState);
+      const expandedGoal = MetaCognitiveEngine.expandGoal(initialState, prompt || 'System maintenance');
+
+      res.json({
+        success: true,
+        metaCognition: {
+          ...auditResult.metaCognition,
+          expandedGoal,
+        },
+        introspectionLogs: auditResult.ego?.introspectionLogs || []
+      });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // API Route: AST Self-Healing Code Transformation & Verification
+  app.post('/api/cognition/self-heal', async (req, res) => {
+    try {
+      const { code } = req.body;
+      const initialState = createInitialState('Self-heal request');
+      const healRes = MetaCognitiveEngine.selfHealSnippet(initialState, code || '');
+
+      res.json({
+        success: true,
+        healedCode: healRes.healedCode,
+        patchSuccess: healRes.patchSuccess,
+        patchLog: healRes.patchLog
+      });
     } catch (err: any) {
       res.status(500).json({ success: false, error: err.message });
     }

@@ -98,6 +98,41 @@ export interface TraceLog {
   label: string; // White-box compliance label
 }
 
+export interface MetaGoal {
+  id: string;
+  title: string;
+  description: string;
+  priority: number; // 1 to 10
+  status: 'active' | 'in_progress' | 'completed' | 'failed' | 'fallback_active';
+  assignedNode?: string;
+  subgoals?: { id: string; title: string; completed: boolean }[];
+  fallbackZone?: string;
+  retryCount: number;
+}
+
+export interface MetaFailurePattern {
+  id: string;
+  timestamp: string;
+  nodeId: string;
+  errorSignature: string;
+  contextSnippet?: string;
+  appliedResolution?: string;
+  resolutionSuccess: boolean;
+}
+
+export interface MetaCognitiveState {
+  driftScore: number; // 0.0 to 1.0 (0 = stable, 1 = high cognitive drift)
+  confidenceRating: number; // 0.0 to 10.0
+  activeGoals: MetaGoal[];
+  failurePatterns: MetaFailurePattern[];
+  successSignatures: string[];
+  heuristicRules: Record<string, string>;
+  fallbackZones: Record<string, string>;
+  selfEvolutionEpoch: number;
+  lastMetaAuditTimestamp?: string;
+  autoHealingActive: boolean;
+}
+
 export interface MicrofyxdState {
   messages: Message[];
   phenotype: PhenotypeState;
@@ -107,6 +142,7 @@ export interface MicrofyxdState {
   memory: MemoryState;
   doctrine: DoctrineState;
   watchdog: WatchdogState;
+  metaCognition: MetaCognitiveState;
   traces: TraceLog[];
 }
 
@@ -145,11 +181,12 @@ export function createInitialState(userPrompt: string): MicrofyxdState {
       identityVector: [
         "Primary Directive: Self-evolution with strict alignment",
         "Cognitive Balance: High skepticism on unverified tools",
-        "Structural integrity: Ensure all code compiles in sandboxes before execution"
+        "Structural integrity: Ensure all code compiles in sandboxes before execution",
+        "Meta-Cognitive Autonomy: Continuous self-monitoring and adaptive goal generation"
       ],
       selfCheckRating: 10,
-      perspectives: ["Objective Analytic", "Defensive Watchdog"],
-      introspectionLogs: ["Ego System Boot sequence completed successfully."],
+      perspectives: ["Objective Analytic", "Defensive Watchdog", "Meta-Cognitive Auditor"],
+      introspectionLogs: ["Ego & Meta-Cognitive System Boot sequence completed successfully."],
       evolutionTier: 1,
     },
     sandbox: {
@@ -158,16 +195,17 @@ export function createInitialState(userPrompt: string): MicrofyxdState {
     memory: {
       hierarchicalAssociativeMemory: {
         "ecu-tuning": ["automotive-subsystem", "engine-safety", "fuel-maps"],
-        "self-repair": ["meta-layers", "code-patches", "validation-tests"]
+        "self-repair": ["meta-layers", "code-patches", "validation-tests"],
+        "meta-cognition": ["self-healing", "drift-monitoring", "goal-expansion", "fallback-zones"]
       },
-      episodicSummaries: ["Initial operational boot. Awaiting primary instruction from human operator."],
-      vectorKeysSaved: ["doc_ecu_safety_reg_102", "code_patch_library_v3.2"],
+      episodicSummaries: ["Initial operational boot. Meta-cognitive monitoring active. Awaiting instruction."],
+      vectorKeysSaved: ["doc_ecu_safety_reg_102", "code_patch_library_v3.2", "meta_cognitive_heuristics_v1.0"],
     },
     doctrine: {
-      activeChecklists: ["SECURE_ISOLATION_VERIFICATION", "TRIPLE_CHECK_ACCURACY_MATRIX"],
+      activeChecklists: ["SECURE_ISOLATION_VERIFICATION", "TRIPLE_CHECK_ACCURACY_MATRIX", "META_COGNITIVE_DRIFT_AUDIT"],
       complianceVerified: true,
       currentArcanaTier: 1,
-      unlockedCapabilities: ["BASE_REASONING", "HARDWARE_PHENOTYPE_READ", "HAM_ASSOCIATIONS"],
+      unlockedCapabilities: ["BASE_REASONING", "HARDWARE_PHENOTYPE_READ", "HAM_ASSOCIATIONS", "META_COGNITIVE_EVALUATION"],
       humanApprovalRequired: false,
     },
     watchdog: {
@@ -176,6 +214,42 @@ export function createInitialState(userPrompt: string): MicrofyxdState {
       ramUsagePercent: 28,
       tokenConsumption: 0,
       safetyOverrideEngaged: false,
+    },
+    metaCognition: {
+      driftScore: 0.05,
+      confidenceRating: 9.8,
+      activeGoals: [
+        {
+          id: 'goal-root-1',
+          title: 'System Operational Stability & Self-Healing Maintenance',
+          description: 'Continuously verify subsystem execution, detect syntax/runtime anomalies, and generate sandbox patches.',
+          priority: 9,
+          status: 'active',
+          assignedNode: 'metaCognitiveAuditNode',
+          subgoals: [
+            { id: 'sub-1', title: 'Verify LangGraph state integrity across execution hops', completed: true },
+            { id: 'sub-2', title: 'Monitor sandbox compilation & repair pipelines', completed: true },
+            { id: 'sub-3', title: 'Index success signatures into HAM memory store', completed: false },
+          ],
+          fallbackZone: 'rule_based_fallback_zone',
+          retryCount: 0,
+        }
+      ],
+      failurePatterns: [],
+      successSignatures: ['SANBOX_COMPILE_SUCCESS', 'HAM_MEMORY_SYNC_OK', 'LLM_ROUTER_CONSENSUS_VERIFIED'],
+      heuristicRules: {
+        'SANDBOX_FAIL_POLICY': 'Route to self-repair node with multi-candidate patch generation',
+        'TOKEN_SPIKE_POLICY': 'Engage LLM fallback router and throttle token consumption',
+        'HARDWARE_THERMAL_POLICY': 'Reduce multi-GPU dispatch ratio to cool down local nodes'
+      },
+      fallbackZones: {
+        'llm_failure': 'Multi-provider router failover (Gemini -> Groq -> DeepSeek -> Local Heuristics)',
+        'sandbox_failure': 'Isolated sandbox patch synthesis and AST linting',
+        'automotive_telemetry_failure': 'Safe-mode ECU map defaults and warning flag trigger'
+      },
+      selfEvolutionEpoch: 1,
+      lastMetaAuditTimestamp: new Date().toISOString(),
+      autoHealingActive: true,
     },
     traces: [],
   };

@@ -21,6 +21,10 @@ const ROUTABLE_NODES = [
   "automotiveObdNode",
   "safetyGateNode",
   "tripleConsensusNode",
+  "metaCognitiveAuditNode",
+  "goalGenerationNode",
+  "autoHealingNode",
+  "memoryUpdateNode",
 ];
 
 export async function arcanaCognitiveRouterNode(state: any) {

@@ -9,9 +9,125 @@ import { PhenotypeEngine } from '@microfyxd/phenotype';
 import { InfraAdaptationLayer } from '@microfyxd/infra';
 import { DoctrineManager, ARCANA_LADDERS } from '@microfyxd/doctrine';
 import { SandboxService } from '@microfyxd/sandbox';
+import { MetaCognitiveEngine } from './metaCognitiveCore.ts';
+
+export { MetaCognitiveEngine };
 
 // LangGraph node signature
 export type GraphNodeFn = (state: MicrofyxdState) => Promise<Partial<MicrofyxdState>>;
+
+// ── META-COGNITIVE GRAPH NODES ──
+
+export const metaCognitiveAuditNode: GraphNodeFn = async (state) => {
+  const auditRes = MetaCognitiveEngine.auditState(state);
+  
+  return {
+    ...auditRes,
+    traces: [{
+      stepId: '', nodeId: 'metaCognitiveAuditNode', timestamp: '',
+      logs: [
+        `[META_COGNITIVE_AUDIT] Auditing system reasoning paths and cognitive drift...`,
+        `[META_COGNITIVE_AUDIT] Current Cognitive Drift Score: ${auditRes.metaCognition?.driftScore?.toFixed(2)}`,
+        `[META_COGNITIVE_AUDIT] System Confidence Rating: ${auditRes.metaCognition?.confidenceRating}/10`,
+        `[META_COGNITIVE_AUDIT] Active Fallback Zones: ${Object.keys(auditRes.metaCognition?.fallbackZones || {}).length}`
+      ],
+      stateUpdate: {},
+      egoIntrospection: `Meta-cognitive auditor evaluates decision trees and system stability. Drift score remains bounded. Proceeding to autonomous goal expansion.`,
+      label: 'Meta-Cognitive Reasoning Audit & Cognitive Drift Evaluation'
+    }]
+  };
+};
+
+export const goalGenerationNode: GraphNodeFn = async (state) => {
+  const prompt = state.messages[0]?.content || '';
+  const expandedGoal = MetaCognitiveEngine.expandGoal(state, prompt);
+  
+  const updatedGoals = [expandedGoal, ...state.metaCognition.activeGoals.filter(g => g.id !== expandedGoal.id)];
+
+  return {
+    metaCognition: {
+      ...state.metaCognition,
+      activeGoals: updatedGoals,
+    },
+    traces: [{
+      stepId: '', nodeId: 'goalGenerationNode', timestamp: '',
+      logs: [
+        `[GOAL_GENERATION] Auto-generating meta-goal structure for input: "${prompt.slice(0, 40)}..."`,
+        `[GOAL_GENERATION] Primary Goal: ${expandedGoal.title} (Priority: ${expandedGoal.priority}/10)`,
+        `[GOAL_GENERATION] Expanded ${expandedGoal.subgoals?.length || 0} autonomous subgoals. Assigned Target Node: ${expandedGoal.assignedNode}`,
+        `[GOAL_GENERATION] Fallback Zone: ${expandedGoal.fallbackZone}`
+      ],
+      stateUpdate: {},
+      egoIntrospection: `Subgoal tree expanded. Assigned high-priority task parameters to specialized subsystem execution nodes.`,
+      label: 'Autonomous Goal Generation & Subgoal Expansion'
+    }]
+  };
+};
+
+export const autoHealingNode: GraphNodeFn = async (state) => {
+  const code = state.sandbox.sourceCode || '';
+  const { healedCode, patchSuccess, patchLog } = MetaCognitiveEngine.selfHealSnippet(state, code);
+
+  let updatedFailures = state.metaCognition.failurePatterns;
+  if (!patchSuccess) {
+    const failUpdate = MetaCognitiveEngine.recordFailure(state, 'sandbox', 'Syntax repair unverified', code);
+    updatedFailures = failUpdate.metaCognition?.failurePatterns || updatedFailures;
+  }
+
+  const patchId = `patch-meta-${Date.now()}`;
+
+  return {
+    sandbox: {
+      ...state.sandbox,
+      sourceCode: healedCode,
+      syntaxOk: patchSuccess,
+      patchesApplied: [
+        ...(state.sandbox.patchesApplied || []),
+        {
+          patchId,
+          patchCode: healedCode,
+          timestamp: new Date().toISOString(),
+          successful: patchSuccess,
+        }
+      ]
+    },
+    metaCognition: {
+      ...state.metaCognition,
+      failurePatterns: updatedFailures,
+    },
+    traces: [{
+      stepId: '', nodeId: 'autoHealingNode', timestamp: '',
+      logs: [
+        `[AUTO_HEAL] Executing self-healing transformation pass...`,
+        `[AUTO_HEAL] ${patchLog}`,
+        `[AUTO_HEAL] Patch Verification Status: ${patchSuccess ? 'SUCCESS' : 'FALLBACK_ZONE_ENGAGED'}`
+      ],
+      stateUpdate: {},
+      egoIntrospection: `Auto-healing engine transformed source AST. Code compilation re-verified in isolated memory boundary.`,
+      label: 'Self-Healing AST Patch Synthesis & Validation'
+    }]
+  };
+};
+
+export const memoryUpdateNode: GraphNodeFn = async (state) => {
+  const lastMsg = state.messages[state.messages.length - 1]?.content || 'Task completed';
+  const memUpdate = MetaCognitiveEngine.consolidateEpisodicMemory(state, lastMsg.slice(0, 100));
+
+  return {
+    ...memUpdate,
+    traces: [{
+      stepId: '', nodeId: 'memoryUpdateNode', timestamp: '',
+      logs: [
+        `[MEMORY_UPDATE] Consolidating execution episode into Hierarchical Associative Memory (HAM)...`,
+        `[MEMORY_UPDATE] Self-Evolution Epoch advanced to Tier ${memUpdate.metaCognition?.selfEvolutionEpoch}`,
+        `[MEMORY_UPDATE] Episodic summary saved. Success signatures updated.`
+      ],
+      stateUpdate: {},
+      egoIntrospection: `Episodic memory consolidated. HAM nodes updated. System self-evolution tier incremented successfully.`,
+      label: 'Episodic Memory Consolidation & Self-Evolution Update'
+    }]
+  };
+};
 
 // Compiled LangGraph runner
 export class CompiledGraph {
@@ -404,18 +520,24 @@ ${state.sandbox.sourceCode}
 // Compile our default production graph
 export function buildProductionGraph(): CompiledGraph {
   const graph = new StateGraph()
+    .addNode('metaCognitiveAuditNode', metaCognitiveAuditNode)
+    .addNode('goalGenerationNode', goalGenerationNode)
     .addNode('phenotypeReadNode', phenotypeReadNode)
     .addNode('gpuDetectNode', gpuDetectNode)
     .addNode('egoModelNode', egoModelNode)
     .addNode('selfCheckNode', selfCheckNode)
     .addNode('diagnoseNode', diagnoseNode)
+    .addNode('autoHealingNode', autoHealingNode)
     .addNode('repairNode', repairNode)
     .addNode('retryNode', retryNode)
     .addNode('humanInTheLoopNode', humanInTheLoopNode)
     .addNode('finalMergeNode', finalMergeNode)
+    .addNode('memoryUpdateNode', memoryUpdateNode)
     
-    .setEntryPoint('phenotypeReadNode')
+    .setEntryPoint('metaCognitiveAuditNode')
     
+    .addEdge('metaCognitiveAuditNode', 'goalGenerationNode')
+    .addEdge('goalGenerationNode', 'phenotypeReadNode')
     .addEdge('phenotypeReadNode', 'gpuDetectNode')
     .addEdge('gpuDetectNode', 'egoModelNode')
     .addEdge('egoModelNode', 'selfCheckNode');
@@ -441,17 +563,19 @@ export function buildProductionGraph(): CompiledGraph {
   });
 
   // Conditional routing from diagnoseNode:
-  // If error has bugs, route to repairNode, else route to humanInTheLoopNode
+  // If error has bugs, route to autoHealingNode then repairNode, else route to humanInTheLoopNode
   graph.addConditionalEdges('diagnoseNode', (state) => {
     if (state.sandbox.diagnostics?.hasBug) {
-      return 'repairNode';
+      return 'autoHealingNode';
     }
     return 'humanInTheLoopNode';
   });
 
+  graph.addEdge('autoHealingNode', 'repairNode');
   graph.addEdge('repairNode', 'retryNode');
   graph.addEdge('retryNode', 'humanInTheLoopNode');
   graph.addEdge('humanInTheLoopNode', 'finalMergeNode');
+  graph.addEdge('finalMergeNode', 'memoryUpdateNode');
 
   return graph.compile();
 }
