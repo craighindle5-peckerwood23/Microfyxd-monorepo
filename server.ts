@@ -443,7 +443,7 @@ Generate a markdown response:
           while (summarizeRetries >= 0) {
             try {
               response = await ai.models.generateContent({
-                model: 'gemini-2.5-flash',
+                model: 'gemini-3.5-flash',
                 contents: geminiPrompt,
               });
               break;
@@ -633,7 +633,7 @@ Strictly analyze the user prompt and generate relevant actions to match their in
         while (retries >= 0) {
           try {
             response = await ai.models.generateContent({
-              model: 'gemini-2.5-flash',
+              model: 'gemini-3.5-flash',
               contents,
               config: {
                 systemInstruction,

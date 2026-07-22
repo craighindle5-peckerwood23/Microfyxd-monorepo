@@ -189,7 +189,18 @@ export default function App() {
       if (goalsData.success) setCognitiveGoals(goalsData.goals);
       if (tasksData.success) setCognitiveTasks(tasksData.tasks);
       if (synapsesData.success) setSynapseConnections(synapsesData.synapses);
-      if (memoriesData.success) setAgentMemories(memoriesData.memories);
+      if (memoriesData.success) {
+        setAgentMemories(memoriesData.memories.map((m: any) => ({
+          id: String(m.id),
+          type: m.memoryType || "semantic",
+          summary: m.value || "No content",
+          importance: Math.round((m.confidence || 0.5) * 10),
+          tags: m.key ? m.key.split(",").map((t: string) => t.trim()).filter(Boolean) : [],
+          timestamp: m.createdAt,
+          decayRate: 0.05,
+          accessCount: m.accessCount || 0
+        })));
+      }
     } catch (err) {
       console.error('Failed to load cognition elements:', err);
     } finally {
@@ -1043,7 +1054,7 @@ export default function App() {
       const res = await fetch('/api/cognition/memories', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ category, summary, importance, tags })
+        body: JSON.stringify({ memoryType: category, value: summary, confidence: importance / 10, key: tags.join(",") })
       });
       const data = await res.json();
       if (data.success) {
