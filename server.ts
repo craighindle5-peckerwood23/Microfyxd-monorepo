@@ -9,7 +9,7 @@ import { GoogleGenAI, Type } from '@google/genai';
 import { requireAuth, AuthRequest } from './src/middleware/auth.ts';
 import { getOrCreateUser } from './src/db/users.ts';
 import { db } from './src/db/index.ts';
-import { favorites, auditLogs, users, goals, tasks, synapses, agentMemory } from './src/db/schema.ts';
+import { favorites, auditLogs, users, goals, tasks, synapses, agentMemory, leads, hvacLeads } from './src/db/schema.ts';
 import { eq, and, desc } from 'drizzle-orm';
 
 // Relative imports from our monorepo packages in the workspace
@@ -17,6 +17,9 @@ import { createInitialState, MicrofyxdState } from './microfyxd/packages/core/in
 import { buildProductionGraph, MetaCognitiveEngine } from './microfyxd/packages/agent/index.ts';
 import { SandboxService } from './microfyxd/packages/sandbox/index.ts';
 import { PhenotypeEngine } from './microfyxd/packages/phenotype/index.ts';
+import { CompoundingMemoryEngine } from './microfyxd/packages/memory/index.ts';
+import { LeadJobRunner } from './microfyxd/packages/agent/leads.ts';
+import { HvacScraperEngine } from './microfyxd/packages/agent/hvacLeads.ts';
 import { routeLLM } from './src/agent/llmRouter.ts';
 
 async function startServer() {
@@ -614,11 +617,13 @@ Strictly analyze the user prompt and generate relevant actions to match their in
 
       try {
         let response;
-        let retries = 2; // 2 retry attempts
-        while (retries >= 0) {
+        let success = false;
+        const modelsToTry = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
+
+        for (const model of modelsToTry) {
           try {
             response = await ai.models.generateContent({
-              model: 'gemini-2.0-flash',
+              model,
               contents,
               config: {
                 systemInstruction,
@@ -626,23 +631,21 @@ Strictly analyze the user prompt and generate relevant actions to match their in
                 responseSchema
               }
             });
-            break;
+            if (response && response.text) {
+              success = true;
+              break;
+            }
           } catch (apiErr: any) {
-            console.warn(`[GEMINI CHAT API ATTEMPT FAILED] Retries left: ${retries}. Error:`, apiErr?.message || apiErr);
             const errStr = String(apiErr?.message || apiErr);
-            if (errStr.includes('429') || errStr.includes('404') || errStr.includes('NOT_FOUND') || errStr.includes('RESOURCE_EXHAUSTED') || errStr.includes('Quota exceeded')) {
-              // Immediately throw on non-retryable errors to trigger fallback without delay
-              throw apiErr;
+            if (errStr.includes('429') || errStr.includes('RESOURCE_EXHAUSTED') || errStr.includes('Quota exceeded')) {
+              console.log(`[GEMINI CHAT] Model ${model} rate limited / quota reached. Trying next model or local fallback.`);
+            } else {
+              console.log(`[GEMINI CHAT] Model ${model} unavailable: ${errStr.slice(0, 100)}`);
             }
-            if (retries === 0) {
-              throw apiErr;
-            }
-            retries--;
-            await new Promise(resolve => setTimeout(resolve, 1000));
           }
         }
 
-        if (response && response.text) {
+        if (success && response && response.text) {
           let rawText = response.text.trim();
           if (rawText.startsWith('```')) {
             rawText = rawText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
@@ -652,8 +655,6 @@ Strictly analyze the user prompt and generate relevant actions to match their in
           try {
             parsed = JSON.parse(rawText);
           } catch (jsonErr) {
-            console.warn('[GEMINI CHAT JSON PARSE WARNING]', jsonErr);
-            // Attempt simple repair or fallback to text
             const match = rawText.match(/"reply"\s*:\s*"([^"]+)"/);
             parsed = {
               reply: match ? match[1] : rawText.replace(/[\{\}\[\]"]/g, '').trim(),
@@ -667,11 +668,14 @@ Strictly analyze the user prompt and generate relevant actions to match their in
             actions: parsed.actions || []
           });
         } else {
-          throw new Error("No response text received from the model.");
+          // If Gemini quota is reached across models, seamlessly engage rule-based local controller
+          console.log('[GEMINI CHAT] Engaging local fallback controller.');
+          const fallback = getRuleBasedFallback(prompt, false);
+          return res.json({ success: true, ...fallback });
         }
       } catch (geminiCallError: any) {
-        console.error('[GEMINI CHAT CALL ERROR - ENGAGING FALLBACK]', geminiCallError?.message || geminiCallError);
-        const fallback = getRuleBasedFallback(prompt, true);
+        console.log('[GEMINI CHAT] Engaging local fallback controller.');
+        const fallback = getRuleBasedFallback(prompt, false);
         return res.json({ success: true, ...fallback });
       }
 
@@ -1171,19 +1175,31 @@ Strictly analyze the user prompt and generate relevant actions to match their in
     }
   });
 
-  // API Route: Get all agent memories
+  // API Route: Get all agent memories (Database + Dual-Tier Compounding Memory)
   app.get('/api/cognition/memories', async (req, res) => {
     try {
-      const memories = await db.select().from(agentMemory).orderBy(desc(agentMemory.createdAt));
-      res.json({ success: true, memories });
+      const dbMemories = await db.select().from(agentMemory).orderBy(desc(agentMemory.createdAt));
+      const compoundingLtm = CompoundingMemoryEngine.getAllLongTerm();
+      res.json({ success: true, memories: dbMemories, compoundingLtm });
     } catch (err: any) {
       res.status(500).json({ success: false, error: err.message });
     }
   });
 
-  // API Route: Insert a new agent memory
+  // API Route: Recall & Compound Memory by keyword
+  app.post('/api/cognition/memories/recall', async (req, res) => {
+    try {
+      const { query, tenantId } = req.body;
+      const recalled = CompoundingMemoryEngine.recallLongTerm(query || '', tenantId || 'default_tenant');
+      res.json({ success: true, query, recalledCount: recalled.length, recalled });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // API Route: Insert a new agent memory into DB and Compounding Memory Engine
   app.post('/api/cognition/memories', async (req, res) => {
-    const { tenantId, memoryType, key, value, confidence } = req.body;
+    const { tenantId, memoryType, key, value, confidence, associations } = req.body;
     try {
       const newMemory = await db.insert(agentMemory).values({
         tenantId: tenantId || 'system-wide',
@@ -1193,6 +1209,16 @@ Strictly analyze the user prompt and generate relevant actions to match their in
         confidence: confidence ? parseFloat(confidence) : 1.0,
         accessCount: 0,
       }).returning();
+
+      // Also persist into Dual-Tier Compounding Engine
+      CompoundingMemoryEngine.writeLongTerm(
+        key || 'system_state_heuristic',
+        value || 'Optimized parameters applied',
+        memoryType || 'episodic',
+        tenantId || 'default_tenant',
+        associations || []
+      );
+
       res.json({ success: true, memory: newMemory[0] });
     } catch (err: any) {
       res.status(500).json({ success: false, error: err.message });
@@ -1232,6 +1258,123 @@ Strictly analyze the user prompt and generate relevant actions to match their in
       res.status(500).json({ success: false, error: err.message });
     }
   });
+
+  // API Route: Execute Lead Generation Mission Job
+  app.post('/api/leads/job/run', async (req, res) => {
+    const { keyword, location } = req.body;
+    try {
+      if (!keyword || !location) {
+        return res.status(400).json({ success: false, error: 'Keyword and location are required' });
+      }
+
+      const jobResult = await LeadJobRunner.runLeadJob(keyword, location);
+
+      // Persist generated leads into database table
+      const insertedLeads = [];
+      for (const leadItem of jobResult.leads) {
+        try {
+          const inserted = await db.insert(leads).values({
+            name: leadItem.name,
+            address: leadItem.address || '',
+            phone: leadItem.phone || '',
+            website: leadItem.website || '',
+            emails: JSON.stringify(leadItem.emails || []),
+            rating: leadItem.rating || 0,
+            reviews: leadItem.reviews || 0,
+            score: leadItem.score || 0,
+            status: 'verified',
+          }).returning();
+          if (inserted[0]) insertedLeads.push(inserted[0]);
+        } catch {
+          // If DB insert fails, fallback gracefully
+        }
+      }
+
+      res.json({
+        success: true,
+        summary: jobResult.summary,
+        compoundedMemoryKey: jobResult.compoundedMemoryKey,
+        leads: insertedLeads.length > 0 ? insertedLeads : jobResult.leads,
+      });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // API Route: List all saved leads
+  app.get('/api/leads/list', async (req, res) => {
+    try {
+      const allLeads = await db.select().from(leads).orderBy(desc(leads.score));
+      res.json({ success: true, count: allLeads.length, leads: allLeads });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // API Route: Execute Multi-County HVAC Permit Lead Scraper
+  app.post('/api/hvac-leads/scrape', async (req, res) => {
+    try {
+      const { county } = req.body;
+      let totalInserted = 0;
+      let scrapedResults: any[] = [];
+
+      if (county) {
+        const countyLeads = await HvacScraperEngine.scrapeCounty(county);
+        scrapedResults = [{ county, count: countyLeads.length, leads: countyLeads }];
+      } else {
+        scrapedResults = await HvacScraperEngine.scrapeAllCounties();
+      }
+
+      // Persist into database
+      for (const group of scrapedResults) {
+        for (const item of group.leads) {
+          try {
+            await db.insert(hvacLeads).values({
+              county: item.county,
+              source: item.source,
+              address: item.address,
+              description: item.description,
+              permitType: item.permitType,
+              status: item.status,
+              date: item.date,
+              contractor: item.contractor,
+              applicant: item.applicant,
+            });
+            totalInserted++;
+          } catch {
+            // Graceful fallback
+          }
+        }
+      }
+
+      res.json({
+        success: true,
+        summary: `HVAC Permit Scraper Complete: Ingested ${totalInserted} permits across configured counties.`,
+        groups: scrapedResults,
+        totalInserted,
+      });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // API Route: List HVAC Permit Leads with optional county filter
+  app.get('/api/hvac-leads', async (req, res) => {
+    try {
+      const { county } = req.query;
+      let query;
+      if (county && typeof county === 'string' && county.trim().length > 0) {
+        query = db.select().from(hvacLeads).where(eq(hvacLeads.county, county.trim())).orderBy(desc(hvacLeads.id));
+      } else {
+        query = db.select().from(hvacLeads).orderBy(desc(hvacLeads.id));
+      }
+      const leadsData = await query;
+      res.json({ success: true, count: leadsData.length, leads: leadsData });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
 
   // Handle 404 for unmatched API routes
   app.all('/api/*', (req, res) => {

@@ -46,7 +46,8 @@ import {
   Volume2,
   VolumeX,
   Sun,
-  Moon
+  Moon,
+  Zap
 } from 'lucide-react';
 import { 
   auth, 
@@ -65,6 +66,8 @@ import { HolographicCanvas } from './components/HolographicCanvas';
 import { ExperimentSandbox } from './components/ExperimentSandbox';
 import { AutonomousEngines } from './components/AutonomousEngines';
 import { MemoryVisualizer } from './components/MemoryVisualizer';
+import { LeadScraperPanel } from './components/LeadScraperPanel';
+import { ChatCommandCenter } from './components/ChatCommandCenter';
 
 interface TraceLog {
   stepId: string;
@@ -84,7 +87,7 @@ interface MonorepoFile {
 
 export default function App() {
   // Navigation & UI state
-  const [activeTab, setActiveTab] = useState<'cockpit' | 'traces' | 'files' | 'phenotype' | 'ego' | 'infra' | 'sandbox' | 'memory' | 'doctrine' | 'workspace' | 'integrations' | 'quantum_tuning' | 'autonomous_engines'>('cockpit');
+  const [activeTab, setActiveTab] = useState<'command_center' | 'cockpit' | 'traces' | 'files' | 'phenotype' | 'ego' | 'infra' | 'sandbox' | 'memory' | 'doctrine' | 'workspace' | 'integrations' | 'quantum_tuning' | 'autonomous_engines' | 'leads'>('command_center');
   const [terminalMode, setTerminalMode] = useState<'langgraph' | 'ai-director'>('ai-director');
   const [autoSpeak, setAutoSpeak] = useState<boolean>(true);
   const [speakingMessageIdx, setSpeakingMessageIdx] = useState<number | null>(null);
@@ -1025,6 +1028,7 @@ export default function App() {
     await logAudit('GPU_VRAM_REROUTE', auditDetails);
 
     setMessages(prev => [...prev, {
+      id: 'msg-gpu-' + Date.now(),
       role: 'system',
       content: `🔄 **GPU VRAM Cluster Rebalanced**: Successfully migrated ${rerouteAmount} GB of cache registers from ${sourceGpu.id.toUpperCase()} to ${destGpu.id.toUpperCase()}.`,
       timestamp: new Date().toLocaleTimeString()
@@ -1096,6 +1100,7 @@ export default function App() {
   // Dynamic Graph execution state
   const [messages, setMessages] = useState<any[]>([
     {
+      id: 'msg-init-0',
       role: 'assistant',
       content: `### Welcome to Microfyxd AI Enterprise System Cockpit
 Microfyxd is an advanced, high-assurance multi-agent platform orchestrated strictly via **LangGraph**.
@@ -1194,6 +1199,7 @@ Microfyxd is an advanced, high-assurance multi-agent platform orchestrated stric
 
     // Append user message
     setMessages(prev => [...prev, {
+      id: 'msg-usr-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6),
       role: 'user',
       content: activePrompt,
       timestamp: new Date().toLocaleTimeString()
@@ -1250,6 +1256,7 @@ Microfyxd is an advanced, high-assurance multi-agent platform orchestrated stric
         // Append assistant response
         const lastMsg = data.finalState.messages[data.finalState.messages.length - 1];
         setMessages(prev => [...prev, {
+          id: 'msg-ast-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6),
           role: 'assistant',
           content: lastMsg.content,
           timestamp: new Date().toLocaleTimeString()
@@ -1260,6 +1267,7 @@ Microfyxd is an advanced, high-assurance multi-agent platform orchestrated stric
     } catch (err: any) {
       console.error(err);
       setMessages(prev => [...prev, {
+        id: 'msg-err-' + Date.now(),
         role: 'system',
         content: `⛔ **LangGraph Runtime Error**: ${err.message || err}`,
         timestamp: new Date().toLocaleTimeString()
@@ -1560,6 +1568,7 @@ Microfyxd is an advanced, high-assurance multi-agent platform orchestrated stric
 
     // Append user message
     setMessages(prev => [...prev, {
+      id: 'msg-usr-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6),
       role: 'user',
       content: activePrompt,
       timestamp: new Date().toLocaleTimeString()
@@ -1583,6 +1592,7 @@ Microfyxd is an advanced, high-assurance multi-agent platform orchestrated stric
         // Append assistant response
         setMessages(prev => {
           const updated = [...prev, {
+            id: 'msg-ast-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6),
             role: 'assistant',
             content: data.reply,
             timestamp: new Date().toLocaleTimeString()
@@ -1697,6 +1707,7 @@ Microfyxd is an advanced, high-assurance multi-agent platform orchestrated stric
     } catch (err: any) {
       console.error(err);
       setMessages(prev => [...prev, {
+        id: 'msg-err-' + Date.now(),
         role: 'system',
         content: `⛔ **AI Director Error**: ${err.message || err}`,
         timestamp: new Date().toLocaleTimeString()
@@ -1786,15 +1797,132 @@ Microfyxd is an advanced, high-assurance multi-agent platform orchestrated stric
         </div>
       </header>
 
-      {/* ARCANA COCKPIT & MEMORY VISUALIZER */}
-      {activeTab === 'memory' ? (
+      {/* UNIFIED SUB-NAVIGATION BAR */}
+      <div className={`px-6 py-2 border-b flex items-center justify-between gap-2 overflow-x-auto text-xs shrink-0 ${
+        theme === 'light' ? 'bg-slate-100/80 border-slate-200' : 'bg-[#0e1018] border-gray-800/80'
+      }`}>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => setActiveTab('command_center')}
+            className={`px-3 py-1.5 rounded-lg font-bold transition-all flex items-center gap-1.5 ${
+              activeTab === 'command_center'
+                ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-slate-950 shadow-md'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
+            }`}
+          >
+            <MessageSquare className="w-3.5 h-3.5" />
+            Chat Command Center
+          </button>
+
+          <button
+            onClick={() => setActiveTab('leads')}
+            className={`px-3 py-1.5 rounded-lg font-medium transition-all flex items-center gap-1.5 ${
+              activeTab === 'leads'
+                ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
+            }`}
+          >
+            <Search className="w-3.5 h-3.5" />
+            Lead Vault & HVAC Permits
+          </button>
+
+          <button
+            onClick={() => setActiveTab('autonomous_engines')}
+            className={`px-3 py-1.5 rounded-lg font-medium transition-all flex items-center gap-1.5 ${
+              activeTab === 'autonomous_engines'
+                ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
+            }`}
+          >
+            <Zap className="w-3.5 h-3.5 text-amber-400" />
+            Autonomous Engines
+          </button>
+
+          <button
+            onClick={() => setActiveTab('memory')}
+            className={`px-3 py-1.5 rounded-lg font-medium transition-all flex items-center gap-1.5 ${
+              activeTab === 'memory'
+                ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
+            }`}
+          >
+            <Database className="w-3.5 h-3.5 text-purple-400" />
+            Agent Memory & LTM
+          </button>
+
+          <button
+            onClick={() => setActiveTab('cockpit')}
+            className={`px-3 py-1.5 rounded-lg font-medium transition-all flex items-center gap-1.5 ${
+              activeTab === 'cockpit'
+                ? 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
+            }`}
+          >
+            <Compass className="w-3.5 h-3.5 text-indigo-400" />
+            Holographic Telemetry Cockpit
+          </button>
+        </div>
+
+        <div className="text-[11px] font-mono text-slate-500 hidden sm:block">
+          Single-View Command Protocol Active
+        </div>
+      </div>
+
+      {/* ARCANA COCKPIT & CHAT COMMAND CENTER & MEMORY VISUALIZER & LEAD PIPELINE */}
+      {activeTab === 'command_center' ? (
+        <main className="flex-1 p-4 sm:p-6 overflow-hidden w-full relative z-10 flex flex-col">
+          <ChatCommandCenter
+            onRunLangGraph={runLangGraphFlow}
+            isRunning={isRunning}
+            traces={traces}
+            metrics={metrics}
+            messages={messages}
+            setMessages={setMessages}
+            onAutoHeal={runAutoHealing}
+            diagnosticState={diagnosticState}
+            currentUser={currentUser}
+            onNavigateTab={(tab: string) => setActiveTab(tab as any)}
+          />
+        </main>
+      ) : activeTab === 'autonomous_engines' ? (
         <main className="flex-1 p-6 overflow-y-auto w-full relative z-10 flex flex-col items-center">
           <div className="w-full max-w-6xl flex flex-col items-start gap-4">
             <button 
-              onClick={() => setActiveTab('cockpit')} 
+              onClick={() => setActiveTab('command_center')} 
               className="px-4 py-2 bg-indigo-500/10 text-indigo-400 border border-indigo-500/30 rounded-lg hover:bg-indigo-500/20 font-mono text-xs font-bold transition-all"
             >
-              ← Return to Arcana Cockpit
+              ← Return to Chat Command Center
+            </button>
+            <div className="w-full">
+              <AutonomousEngines 
+                onApplyCoherenceBoost={(boost) => setCoherence(prev => Math.min(100, Number((prev + boost).toFixed(1))))}
+                systemHealth={metrics.cpu}
+              />
+            </div>
+          </div>
+        </main>
+      ) : activeTab === 'leads' ? (
+        <main className="flex-1 p-6 overflow-y-auto w-full relative z-10 flex flex-col items-center">
+          <div className="w-full max-w-6xl flex flex-col items-start gap-4">
+            <button 
+              onClick={() => setActiveTab('command_center')} 
+              className="px-4 py-2 bg-indigo-500/10 text-indigo-400 border border-indigo-500/30 rounded-lg hover:bg-indigo-500/20 font-mono text-xs font-bold transition-all"
+            >
+              ← Return to Chat Command Center
+            </button>
+            <div className="w-full">
+              <LeadScraperPanel />
+            </div>
+          </div>
+        </main>
+      ) : activeTab === 'memory' ? (
+        <main className="flex-1 p-6 overflow-y-auto w-full relative z-10 flex flex-col items-center">
+          <div className="w-full max-w-6xl flex flex-col items-start gap-4">
+            <button 
+              onClick={() => setActiveTab('command_center')} 
+              className="px-4 py-2 bg-indigo-500/10 text-indigo-400 border border-indigo-500/30 rounded-lg hover:bg-indigo-500/20 font-mono text-xs font-bold transition-all"
+            >
+              ← Return to Chat Command Center
             </button>
             <div className="w-full">
               <MemoryVisualizer
@@ -1809,8 +1937,15 @@ Microfyxd is an advanced, high-assurance multi-agent platform orchestrated stric
         </main>
       ) : (
         <main className="relative z-10 flex-1 px-4 sm:px-8 pt-10 pb-16 flex flex-col items-center w-full overflow-y-auto">
-          {/* Memory Button Overlay */}
-          <div className="absolute top-4 right-8 z-50">
+          {/* Action Buttons Overlay */}
+          <div className="absolute top-4 right-8 z-50 flex items-center gap-2">
+            <button 
+              onClick={() => setActiveTab('leads')} 
+              className="px-4 py-2 border border-cyan-500/30 text-cyan-400 bg-cyan-500/10 rounded-lg text-xs font-mono font-bold hover:bg-cyan-500/20 transition-all flex items-center gap-2 shadow-lg"
+            >
+              <Search className="w-4 h-4" />
+              LEAD PIPELINE
+            </button>
             <button 
               onClick={() => setActiveTab('memory')} 
               className="px-4 py-2 border border-indigo-500/30 text-indigo-400 bg-indigo-500/10 rounded-lg text-xs font-mono font-bold hover:bg-indigo-500/20 transition-all flex items-center gap-2 shadow-lg"

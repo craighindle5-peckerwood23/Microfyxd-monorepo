@@ -23,8 +23,8 @@ import {
 } from 'lucide-react';
 
 interface AutonomousEnginesProps {
-  onApplyCoherenceBoost: (boost: number) => void;
-  systemHealth: number;
+  onApplyCoherenceBoost?: (boost: number) => void;
+  systemHealth?: number;
   onDecreaseThreatLevel?: (amount: number) => void;
 }
 
@@ -454,7 +454,9 @@ export const AutonomousEngines: React.FC<AutonomousEnginesProps> = ({
     coherenceBoostReward = Number(coherenceBoostReward.toFixed(1));
 
     // Pipe the rewards up to parent App.tsx state
-    onApplyCoherenceBoost(coherenceBoostReward);
+    if (typeof onApplyCoherenceBoost === 'function') {
+      onApplyCoherenceBoost(coherenceBoostReward);
+    }
     if (onDecreaseThreatLevel) {
       onDecreaseThreatLevel(3.2); // Squelch threat level by completing DAG runs
     }

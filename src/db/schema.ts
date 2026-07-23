@@ -100,4 +100,36 @@ export const synapses = pgTable('synapses', {
   createdAt: timestamp('created_at').defaultNow(),
 });
 
+// Define the 'leads' table for lead scraping & discovery engine
+export const leads = pgTable('leads', {
+  id: serial('id').primaryKey(),
+  name: text('name').notNull(),
+  address: text('address'),
+  phone: text('phone'),
+  website: text('website'),
+  emails: text('emails'), // JSON string array of emails
+  rating: real('rating'),
+  reviews: integer('reviews').default(0),
+  score: integer('score').default(0),
+  status: text('status').default('verified'), // 'verified' | 'unverified' | 'contacted'
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// Define the 'hvacLeads' table for multi-county permit scraping engine
+export const hvacLeads = pgTable('hvac_leads', {
+  id: serial('id').primaryKey(),
+  county: text('county').notNull(),
+  source: text('source'),
+  address: text('address'),
+  description: text('description'),
+  permitType: text('permit_type').default('HVAC'),
+  status: text('status').default('Under Review'),
+  date: text('date'),
+  contractor: text('contractor'),
+  applicant: text('applicant'),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+
+
 
