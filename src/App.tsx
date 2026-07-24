@@ -49,6 +49,8 @@ import {
   Moon,
   Zap
 } from 'lucide-react';
+import { AppShell } from './cockpit/AppShell';
+
 import { 
   auth, 
   googleSignIn, 
@@ -1720,16 +1722,28 @@ Microfyxd is an advanced, high-assurance multi-agent platform orchestrated stric
 
   const selectedFile = monorepoFiles.find(f => f.path === selectedFilePath);
 
-      </div>
-        </main>
-      )}
-      {/* FOOTER */}
-      <footer className="bg-[#06070a] border-t border-gray-900 text-[11px] text-gray-500 font-mono px-6 py-3 flex flex-wrap items-center justify-between gap-4">
-        <span>Microfyxd Enterprise Management • Authorized Access Only</span>
-        <span>UTC Time: {new Date().toISOString().slice(0, 19).replace('T', ' ')}</span>
-      </footer>
-
-    </div>
+  return (
+    <AppShell
+      theme={theme}
+      toggleTheme={toggleTheme}
+      activeTab={activeTab}
+      setActiveTab={setActiveTab}
+      metrics={metrics}
+      currentUser={currentUser}
+      runLangGraphFlow={runLangGraphFlow}
+      runAutoHealing={runAutoHealing}
+      isRunning={isRunning}
+      traces={traces}
+      messages={messages}
+      setMessages={setMessages}
+      diagnosticState={diagnosticState}
+      agentMemories={agentMemories}
+      handleAddMemoryNode={handleAddMemoryNode}
+      handleDeleteMemoryNode={handleDeleteMemoryNode}
+      handleAccessMemoryNode={handleAccessMemoryNode}
+      coherence={coherence}
+      setCoherence={setCoherence}
+    />
   );
 }
-                    
+
