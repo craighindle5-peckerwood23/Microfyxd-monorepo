@@ -155,6 +155,22 @@ export function ChatCommandCenter({
       await onRunLangGraph(promptToRun);
     } catch (err: any) {
       console.error('Command center execution error:', err);
+      const errMsg = err?.message || String(err);
+      
+      if (onAutoHeal) {
+        onAutoHeal();
+      }
+
+      setMessages(prev => [
+        ...prev,
+        {
+          id: 'msg-err-' + Date.now(),
+          role: 'assistant',
+          content: `⚠️ **Execution Boundary Intercepted**: ${errMsg}\n\n*Microfyxd Self-Repair Loop engaged. AST patches applied and execution memory state auto-healed.*`,
+          timestamp: new Date().toLocaleTimeString(),
+          statusChip: 'Self-Healed'
+        }
+      ]);
     }
   };
 

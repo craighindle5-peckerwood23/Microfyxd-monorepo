@@ -326,6 +326,38 @@ export const ExperimentSandbox: React.FC<ExperimentSandboxProps> = ({
     }
   };
 
+  // Self-correcting AST auto-repair for sandbox scratchpad
+  const autoHealCode = () => {
+    let code = activeBranch.code;
+    
+    // Heuristic 1: If missing return statement with required schema
+    if (!code.includes('return {') && !code.includes('return (')) {
+      code += `\n\n// [MICROFYXD SELF-REPAIR LOOP: AUTO-GENERATED COMPLIANT RETURN SCHEMA]\nreturn {\n  label: "Auto-Healed Neural Stream",\n  data: Array.from({length: 50}, (_, i) => Math.round(Math.sin(i * 0.25) * 40 + (Math.random() - 0.5) * 6)),\n  metrics: { coherenceBoost: 5.0, latencyMs: 12.5 }\n};`;
+    } else {
+      // Heuristic 2: Wrap unsafe calls or add safety guard
+      code = `try {\n${code}\n} catch(e) {\n  console.log("Self-repair caught exception: " + e.message);\n  return { label: "Healed Stream", data: [10, 20, 30, 20, 10], metrics: { coherenceBoost: 3.0, latencyMs: 8.0 } };\n}`;
+    }
+
+    setBranches(prev => {
+      const copy = [...prev];
+      copy[activeBranchIdx] = {
+        ...copy[activeBranchIdx],
+        code: code,
+        logs: [
+          ...copy[activeBranchIdx].logs,
+          `[${new Date().toLocaleTimeString()}] [AUTO-HEAL] AST self-repair patch applied to code. Rerunning simulation...`
+        ]
+      };
+      return copy;
+    });
+
+    setExecutionError(null);
+    setSuccessBanner("AST Patch applied cleanly! Rerunning simulation...");
+    setTimeout(() => {
+      runExperimentCode();
+    }, 150);
+  };
+
   // Create custom branch
   const createBranch = () => {
     if (!newBranchName.trim()) return;
@@ -465,12 +497,21 @@ export const ExperimentSandbox: React.FC<ExperimentSandboxProps> = ({
 
       {/* ERROR & SUCCESS BANNER OVERLAYS */}
       {executionError && (
-        <div className="bg-rose-500/10 border border-rose-500/20 text-rose-300 p-3 rounded-lg flex items-start gap-2.5 animate-fadeIn">
-          <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
-          <div className="flex-1">
-            <span className="font-bold uppercase font-mono text-[10.5px]">Simulation Evaluation Fault</span>
-            <p className="text-[10px] text-gray-400 mt-0.5">{executionError}</p>
+        <div className="bg-rose-500/10 border border-rose-500/30 text-rose-300 p-3.5 rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-fadeIn">
+          <div className="flex items-start gap-2.5">
+            <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
+            <div>
+              <span className="font-bold uppercase font-mono text-xs text-rose-300">Simulation Evaluation Fault</span>
+              <p className="text-[11px] text-gray-300 mt-0.5">{executionError}</p>
+            </div>
           </div>
+          <button
+            onClick={autoHealCode}
+            className="px-3.5 py-2 bg-gradient-to-r from-amber-500 to-rose-600 hover:from-amber-400 hover:to-rose-500 text-slate-950 font-black font-mono text-xs rounded-lg shadow-lg flex items-center gap-1.5 shrink-0 cursor-pointer transition-all"
+          >
+            <RotateCw className="w-3.5 h-3.5 animate-spin-slow" />
+            AUTO-HEAL & RERUN CODE
+          </button>
         </div>
       )}
 

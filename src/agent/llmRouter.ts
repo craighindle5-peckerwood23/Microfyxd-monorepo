@@ -4,6 +4,35 @@ import { GoogleGenAI } from '@google/genai';
 // Add any provider here. Order = priority.
 const PROVIDERS = [
   {
+    name: 'groq',
+    available: () => !!process.env.GROQ_API_KEY,
+    invoke: async (prompt: string, system: string) => {
+      const messages = [];
+      if (system) messages.push({ role: 'system', content: system });
+      messages.push({ role: 'user', content: prompt });
+
+      const res = await fetch(
+        'https://api.groq.com/openai/v1/chat/completions',
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${process.env.GROQ_API_KEY}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            model: 'llama-3.3-70b-versatile',
+            messages
+          })
+        }
+      );
+      const data = await res.json() as any;
+      if (!res.ok || data.error) {
+        throw new Error(data.error?.message || `Groq error ${res.status}`);
+      }
+      return data.choices[0]?.message?.content || '';
+    }
+  },
+  {
     name: 'azure-openai',
     available: () => !!(process.env.AZURE_OPENAI_API_KEY && process.env.AZURE_OPENAI_ENDPOINT),
     invoke: async (prompt: string, system: string) => {
@@ -39,7 +68,7 @@ const PROVIDERS = [
       const ai = new GoogleGenAI({ 
         apiKey: process.env.GEMINI_API_KEY! 
       });
-      const modelsToTry = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
+      const modelsToTry = ['gemini-2.0-flash', 'gemini-2.0-flash-lite'];
       let lastErr = null;
       for (const model of modelsToTry) {
         try {
@@ -87,35 +116,6 @@ const PROVIDERS = [
       const data = await res.json() as any;
       if (!res.ok || data.error) {
         throw new Error(data.error?.message || `OpenAI error ${res.status}`);
-      }
-      return data.choices[0]?.message?.content || '';
-    }
-  },
-  {
-    name: 'groq',
-    available: () => !!process.env.GROQ_API_KEY,
-    invoke: async (prompt: string, system: string) => {
-      const messages = [];
-      if (system) messages.push({ role: 'system', content: system });
-      messages.push({ role: 'user', content: prompt });
-
-      const res = await fetch(
-        'https://api.groq.com/openai/v1/chat/completions',
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${process.env.GROQ_API_KEY}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            model: 'llama-3.3-70b-versatile',
-            messages
-          })
-        }
-      );
-      const data = await res.json() as any;
-      if (!res.ok || data.error) {
-        throw new Error(data.error?.message || `Groq error ${res.status}`);
       }
       return data.choices[0]?.message?.content || '';
     }

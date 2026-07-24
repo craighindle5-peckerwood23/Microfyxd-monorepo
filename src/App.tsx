@@ -68,6 +68,7 @@ import { AutonomousEngines } from './components/AutonomousEngines';
 import { MemoryVisualizer } from './components/MemoryVisualizer';
 import { LeadScraperPanel } from './components/LeadScraperPanel';
 import { ChatCommandCenter } from './components/ChatCommandCenter';
+import { CognitiveArchitectureView } from './components/CognitiveArchitectureView';
 
 interface TraceLog {
   stepId: string;
@@ -87,7 +88,7 @@ interface MonorepoFile {
 
 export default function App() {
   // Navigation & UI state
-  const [activeTab, setActiveTab] = useState<'command_center' | 'cockpit' | 'traces' | 'files' | 'phenotype' | 'ego' | 'infra' | 'sandbox' | 'memory' | 'doctrine' | 'workspace' | 'integrations' | 'quantum_tuning' | 'autonomous_engines' | 'leads'>('command_center');
+  const [activeTab, setActiveTab] = useState<'command_center' | 'cognitive_arch' | 'cockpit' | 'traces' | 'files' | 'phenotype' | 'ego' | 'infra' | 'sandbox' | 'memory' | 'doctrine' | 'workspace' | 'integrations' | 'quantum_tuning' | 'autonomous_engines' | 'leads'>('command_center');
   const [terminalMode, setTerminalMode] = useState<'langgraph' | 'ai-director'>('ai-director');
   const [autoSpeak, setAutoSpeak] = useState<boolean>(true);
   const [speakingMessageIdx, setSpeakingMessageIdx] = useState<number | null>(null);
@@ -1815,6 +1816,18 @@ Microfyxd is an advanced, high-assurance multi-agent platform orchestrated stric
           </button>
 
           <button
+            onClick={() => setActiveTab('cognitive_arch')}
+            className={`px-3 py-1.5 rounded-lg font-medium transition-all flex items-center gap-1.5 ${
+              activeTab === 'cognitive_arch'
+                ? 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
+            }`}
+          >
+            <Brain className="w-3.5 h-3.5 text-indigo-400" />
+            Cognitive Architecture (20 Nodes)
+          </button>
+
+          <button
             onClick={() => setActiveTab('leads')}
             className={`px-3 py-1.5 rounded-lg font-medium transition-all flex items-center gap-1.5 ${
               activeTab === 'leads'
@@ -1883,6 +1896,10 @@ Microfyxd is an advanced, high-assurance multi-agent platform orchestrated stric
             currentUser={currentUser}
             onNavigateTab={(tab: string) => setActiveTab(tab as any)}
           />
+        </main>
+      ) : activeTab === 'cognitive_arch' ? (
+        <main className="flex-1 p-4 sm:p-6 overflow-y-auto w-full relative z-10 flex flex-col">
+          <CognitiveArchitectureView onNavigateTab={(tab: string) => setActiveTab(tab as any)} />
         </main>
       ) : activeTab === 'autonomous_engines' ? (
         <main className="flex-1 p-6 overflow-y-auto w-full relative z-10 flex flex-col items-center">

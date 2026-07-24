@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Database, Plus, Search, Trash2, Zap, RefreshCw, Cpu, Brain, Tag, Sparkles, Activity, Eye, ShieldAlert, BarChart2 } from 'lucide-react';
+import { Database, Plus, Search, Trash2, Zap, RefreshCw, Cpu, Brain, Tag, Sparkles, Activity, Eye, ShieldAlert, BarChart2, Download } from 'lucide-react';
 
 export interface MemoryNode {
   id: string;
@@ -218,6 +218,34 @@ export const MemoryVisualizer: React.FC<MemoryVisualizerProps> = ({
     }, 2800);
   };
 
+  const handleExportMemoryLogs = () => {
+    const exportData = {
+      exportedAt: new Date().toISOString(),
+      agentSystem: "MICROFYXD-COGNITIVE-MEMORY-MATRIX",
+      totalMemories: memories.length,
+      memories: memories.map(m => ({
+        id: m.id,
+        category: m.category,
+        summary: m.summary,
+        importance: m.importance,
+        accessCount: m.accessCount,
+        decayRate: m.decayRate,
+        tags: m.tags,
+        createdAt: m.createdAt,
+        associatedIds: m.associatedIds || [],
+        embeddingVector: m.embeddingVector || []
+      }))
+    };
+
+    const jsonString = `data:text/json;charset=utf-8,${encodeURIComponent(JSON.stringify(exportData, null, 2))}`;
+    const downloadAnchor = document.createElement('a');
+    downloadAnchor.setAttribute('href', jsonString);
+    downloadAnchor.setAttribute('download', `microfyxd_memory_logs_${Date.now()}.json`);
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
+  };
+
   const handleSubmitNewMemory = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newSummary.trim()) return;
@@ -249,6 +277,18 @@ export const MemoryVisualizer: React.FC<MemoryVisualizerProps> = ({
         </div>
 
         <div className="flex items-center gap-2.5">
+          <button
+            onClick={handleExportMemoryLogs}
+            className={`px-3.5 py-2 rounded-lg font-mono text-xs font-semibold flex items-center gap-2 border transition cursor-pointer ${
+              isLight
+                ? 'bg-white hover:bg-slate-50 text-emerald-600 border-emerald-200 shadow-sm'
+                : 'bg-emerald-950/40 hover:bg-emerald-900/60 text-emerald-400 border-emerald-500/30'
+            }`}
+          >
+            <Download className="w-3.5 h-3.5 text-emerald-400" />
+            EXPORT MEMORY LOGS
+          </button>
+
           <button
             onClick={handleConsolidate}
             disabled={isConsolidating}

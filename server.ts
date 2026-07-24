@@ -21,6 +21,7 @@ import { CompoundingMemoryEngine } from './microfyxd/packages/memory/index.ts';
 import { LeadJobRunner } from './microfyxd/packages/agent/leads.ts';
 import { HvacScraperEngine } from './microfyxd/packages/agent/hvacLeads.ts';
 import { routeLLM } from './src/agent/llmRouter.ts';
+import { Microfyxd100xStressTester } from './src/agent/stressTester.ts';
 
 async function startServer() {
   const app = express();
@@ -36,6 +37,19 @@ async function startServer() {
     } catch (err: any) {
       console.error('[SYNC USER ERROR]', err);
       res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // API Route: 100x System Load & Stress Testing Endpoint
+  app.post('/api/stress-test', async (req, res) => {
+    try {
+      const loadFactor = req.body?.loadFactor || 100;
+      console.log(`[SERVER STRESS TEST] Commencing ${loadFactor}x Consciousness Graph Stress Test...`);
+      const metrics = await Microfyxd100xStressTester.execute100xStressTest(loadFactor);
+      res.json({ success: true, metrics });
+    } catch (err: any) {
+      console.error('[STRESS TEST ERROR]', err);
+      res.status(500).json({ success: false, error: err?.message || String(err) });
     }
   });
 
@@ -616,9 +630,45 @@ Strictly analyze the user prompt and generate relevant actions to match their in
       };
 
       try {
+        if (process.env.GROQ_API_KEY) {
+          try {
+            console.log('[GROQ CHAT] Executing prompt via Groq Llama-3.3-70b...');
+            const groqMessages = [
+              { role: 'system', content: `${systemInstruction}\n\nIMPORTANT: You MUST reply strictly in valid JSON format matching: {"reply": "...", "actions": [...]}` },
+              ...contents.map(c => ({ role: c.role === 'model' ? 'assistant' : 'user', content: c.parts[0].text }))
+            ];
+            const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${process.env.GROQ_API_KEY}`,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                model: 'llama-3.3-70b-versatile',
+                messages: groqMessages,
+                response_format: { type: 'json_object' }
+              })
+            });
+            const groqData = await groqRes.json() as any;
+            if (groqRes.ok && groqData.choices?.[0]?.message?.content) {
+              const raw = groqData.choices[0].message.content.trim();
+              const parsed = JSON.parse(raw);
+              console.log('[GROQ CHAT] Successfully generated response via Groq API.');
+              return res.json({
+                success: true,
+                reply: parsed.reply || "Microfyxd Groq System online.",
+                actions: parsed.actions || [],
+                provider: 'groq'
+              });
+            }
+          } catch (groqErr) {
+            console.log('[GROQ CHAT] Groq API call encountered error, falling back to next provider:', groqErr);
+          }
+        }
+
         let response;
         let success = false;
-        const modelsToTry = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
+        const modelsToTry = ['gemini-2.0-flash', 'gemini-2.0-flash-lite'];
 
         for (const model of modelsToTry) {
           try {
