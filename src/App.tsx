@@ -1720,7 +1720,7 @@ Microfyxd is an advanced, high-assurance multi-agent platform orchestrated stric
 
   const selectedFile = monorepoFiles.find(f => f.path === selectedFilePath);
 
-      div>
+      </div>
         </main>
       )}
       {/* FOOTER */}
